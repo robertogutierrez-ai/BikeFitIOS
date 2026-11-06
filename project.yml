@@ -1,0 +1,46 @@
+name: BikeFitIOS
+options:
+  bundleIdPrefix: com.bikefit
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+targets:
+  BikeFitIOS:
+    type: application
+    platform: iOS
+    sources:
+      - BikeFitIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bikefit.ios
+        PRODUCT_NAME: BikeFit
+        PRODUCT_MODULE_NAME: BikeFitIOS
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: BikeFit
+        INFOPLIST_KEY_NSCameraUsageDescription: La cámara permite grabar tu postura en la bicicleta.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  BikeFitIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - BikeFitIOSTests
+    dependencies:
+      - target: BikeFitIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bikefit.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  BikeFitIOS:
+    build:
+      targets:
+        BikeFitIOS: all
+        BikeFitIOSTests: [test]
+    test:
+      targets:
+        - BikeFitIOSTests

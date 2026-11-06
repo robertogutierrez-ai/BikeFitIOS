@@ -16,7 +16,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bikefit.ios
-        PRODUCT_NAME: BikeFit
+        PRODUCT_NAME: BikeFitIOS
         PRODUCT_MODULE_NAME: BikeFitIOS
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"

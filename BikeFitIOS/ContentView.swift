@@ -45,9 +45,11 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Asistente de vídeo").font(.title.bold())
                 Text("Prepara el rodillo en un lugar estable, despejado y bien iluminado.")
-                Text("Coloca el iPhone de lado, perpendicular a la bicicleta. Usa un soporte fijo y deja visible todo el cuerpo durante la pedalada.")
+                Text("Coloca el iPhone en un soporte fijo, de lado y perpendicular a la bicicleta.")
+                Text("Aleja la cámara hasta que entren la bicicleta y todo el cuerpo, incluidos cabeza, manos y pies, durante toda la pedalada.")
+                Text("En la cámara puedes mostrar u ocultar el marco, el centro y la línea inferior de referencia.")
                 Text("Graba unos 15 segundos pedaleando con naturalidad. El vídeo se graba sin sonido y se analiza en el dispositivo.")
-                Text("Las guías son orientativas: no detectan ni validan automáticamente el encuadre.")
+                Text("Las guías son orientativas: no detectan ni validan automáticamente el encuadre y no se graban en el vídeo.")
                     .foregroundStyle(.secondary)
                 Button("Abrir cámara guiada") {
                     screen = .capture
@@ -164,32 +166,44 @@ struct ContentView: View {
 private struct CaptureScreen: View {
     @StateObject private var camera = CameraCapture()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showGuides = true
     let onCancel: () -> Void
     let onFinished: (URL) -> Void
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("De lado: mantén al ciclista y la bicicleta dentro del marco durante toda la pedalada.")
+            Text("De lado: deja espacio alrededor del ciclista y la bicicleta durante toda la pedalada.")
                 .font(.subheadline)
                 .padding(.horizontal)
             GeometryReader { geometry in
                 ZStack {
                     CameraPreview(session: camera.session)
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(style: StrokeStyle(lineWidth: 3, dash: [8, 5]))
-                        .foregroundStyle(.white)
-                        .frame(width: geometry.size.width * 0.84, height: geometry.size.height * 0.84)
-                    Rectangle()
-                        .fill(.cyan)
-                        .frame(width: geometry.size.width * 0.84, height: 2)
-                        .offset(y: geometry.size.height * 0.42)
-                    Image(systemName: "plus")
-                        .foregroundStyle(.cyan)
+                    if showGuides {
+                        FramingGuide()
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                 }
+                .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
-                .accessibilityLabel("Vista de cámara con guía de encuadre")
+                .accessibilityLabel(showGuides
+                    ? "Vista de cámara con marco, centro y línea inferior de referencia"
+                    : "Vista de cámara sin guías")
             }
             .background(.black)
+            HStack {
+                Text(showGuides
+                    ? "Marco: deja margen · Cruz: centro · Línea: referencia inferior"
+                    : "Guías ocultas")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(showGuides ? "Ocultar guías" : "Mostrar guías") {
+                    showGuides.toggle()
+                }
+                .font(.caption)
+            }
+            .padding(.horizontal)
             Text(camera.recording ? "Grabando · objetivo: 15 segundos" : "Graba unos 15 segundos · Sin sonido")
                 .font(.caption)
             HStack {
@@ -257,7 +271,7 @@ private struct ReviewScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Revisa el vídeo").font(.title2.bold())
-                Text("Comprueba que se vea el cuerpo completo de lado durante varias pedaladas.")
+                Text("Comprueba que se vean la bicicleta y el cuerpo completo de lado, incluidos cabeza, manos y pies, durante varias pedaladas.")
                 VideoPlayer(player: player)
                     .frame(height: 240)
                 if isAnalyzing {

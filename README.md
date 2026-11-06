@@ -2,7 +2,7 @@
 
 Prototipo independiente de BikeFit Android, versión 0.1.0. Incluye grabación silenciosa guiada con la cámara trasera, revisión, análisis lateral en el dispositivo y rangos básicos de cuatro ángulos. Las grabaciones son temporales y se eliminan al terminar o repetir; iOS también puede borrar archivos temporales. No hay historial, exportación, sincronización ni análisis de vídeos de la galería.
 
-Las guías son visuales y no comprueban automáticamente el encuadre. El análisis utiliza Apple Vision a 5 muestras por segundo y selecciona el lado con más fotogramas válidos. La convención angular coincide con las fórmulas de Android: 0° aproximadamente para una articulación recta. Apple Vision es distinto de MediaPipe, por lo que las mediciones no son directamente equivalentes. Los resultados son orientativos, no constituyen un diagnóstico ni recomendaciones de ajuste y necesitan validación con vídeos reales.
+La cámara muestra un marco con márgenes, una línea central, una cruz y una línea inferior como referencias; se pueden ocultar y no aparecen en la grabación. Estas guías son visuales: no localizan al ciclista ni comprueban automáticamente el encuadre. Hay que mantener visibles la bicicleta y el cuerpo completo durante toda la pedalada y comprobarlo en la revisión. El análisis utiliza Apple Vision a 5 muestras por segundo y selecciona el lado con más fotogramas válidos. La convención angular coincide con las fórmulas de Android: 0° aproximadamente para una articulación recta. Apple Vision es distinto de MediaPipe, por lo que las mediciones no son directamente equivalentes. Los resultados son orientativos, no constituyen un diagnóstico ni recomendaciones de ajuste y necesitan validación con vídeos reales.
 
 ## Compilación
 

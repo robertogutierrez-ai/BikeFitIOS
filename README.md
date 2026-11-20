@@ -1,8 +1,10 @@
 # BikeFit iOS
 
-Prototipo independiente de BikeFit Android, versión 0.1.0. Incluye grabación silenciosa guiada con la cámara trasera, revisión, análisis lateral en el dispositivo y rangos básicos de cuatro ángulos, además de un asistente manual de calas. Las grabaciones son temporales y se eliminan al terminar o repetir; iOS también puede borrar archivos temporales. No hay historial de sesiones de vídeo, exportación, sincronización ni análisis de vídeos de la galería.
+Prototipo independiente de BikeFit Android, versión 0.1.0. Incluye grabación silenciosa guiada con la cámara trasera, selección de vídeos de la fototeca, revisión, análisis lateral en el dispositivo y rangos básicos de cuatro ángulos, además de un asistente manual de calas. Las grabaciones y las copias importadas son temporales y se eliminan al terminar o repetir; iOS también puede borrar archivos temporales. No hay historial de sesiones de vídeo, exportación ni sincronización.
 
 La cámara muestra un marco con márgenes, una línea central, una cruz y una línea inferior como referencias; se pueden ocultar y no aparecen en la grabación. Estas guías son visuales: no localizan al ciclista ni comprueban automáticamente el encuadre. Hay que mantener visibles la bicicleta y el cuerpo completo durante toda la pedalada y comprobarlo en la revisión. El análisis utiliza Apple Vision a 5 muestras por segundo y selecciona el lado con más fotogramas válidos. La convención angular coincide con las fórmulas de Android: 0° aproximadamente para una articulación recta. Apple Vision es distinto de MediaPipe, por lo que las mediciones no son directamente equivalentes. Los resultados son orientativos, no constituyen un diagnóstico ni recomendaciones de ajuste y necesitan validación con vídeos reales.
+
+Para analizar un vídeo existente, pulsa **Analizar vídeo de la fototeca**, selecciónalo y revísalo antes de iniciar el análisis. La app crea una copia temporal: al cerrar, finalizar o repetir se elimina esa copia, no el vídeo original. Los vídeos alojados en iCloud pueden necesitar descarga y espacio disponible. El selector solo entrega a la app el vídeo elegido.
 
 ## Asistente de calas
 

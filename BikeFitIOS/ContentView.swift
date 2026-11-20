@@ -1,5 +1,6 @@
 import AVFoundation
 import AVKit
+import PhotosUI
 import SwiftUI
 
 struct ContentView: View {
@@ -13,6 +14,9 @@ struct ContentView: View {
     @State private var analysisError: String?
     @State private var isAnalyzing = false
     @State private var analysisTask: Task<Void, Never>?
+    @State private var selectedVideo: PhotosPickerItem?
+    @State private var isImporting = false
+    @State private var importError: String?
 
     var body: some View {
         NavigationStack {
@@ -40,6 +44,33 @@ struct ContentView: View {
             .navigationTitle("BikeFit")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .onChange(of: selectedVideo) { selection in
+            guard let selection = selection, !isImporting else { return }
+            isImporting = true
+            Task {
+                do {
+                    guard let video = try await selection.loadTransferable(type: ImportedVideo.self) else {
+                        throw VideoImportError.unavailable
+                    }
+                    videoURL = video.url
+                    result = nil
+                    analysisError = nil
+                    screen = .review
+                } catch {
+                    importError = "No se pudo importar el vídeo: \(error.localizedDescription)"
+                }
+                selectedVideo = nil
+                isImporting = false
+            }
+        }
+        .alert("Importar vídeo", isPresented: Binding(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("Aceptar", role: .cancel) {}
+        } message: {
+            Text(importError ?? "")
+        }
     }
 
     private var home: some View {
@@ -57,6 +88,18 @@ struct ContentView: View {
                     screen = .capture
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isImporting)
+                PhotosPicker(selection: $selectedVideo, matching: .videos) {
+                    Text("Analizar vídeo de la fototeca")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isImporting)
+                if isImporting {
+                    ProgressView("Importando vídeo…")
+                    Text("Si el vídeo está en iCloud, puede tardar en descargarse.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 Divider()
                 Text("Asistente de calas").font(.title2.bold())
                 Text("Fotografía cada suela y marca manualmente los ejes de la zapatilla y de la cala.")
@@ -64,6 +107,7 @@ struct ContentView: View {
                     screen = .cleats
                 }
                 .buttonStyle(.bordered)
+                .disabled(isImporting)
             }
             .padding()
         }
@@ -169,6 +213,14 @@ struct ContentView: View {
             analysisError = "No se pudo eliminar el vídeo temporal: \(error.localizedDescription)"
             return false
         }
+    }
+}
+
+private enum VideoImportError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        "No se pudo obtener el archivo seleccionado."
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SessionHistoryView: View {
     let onClose: () -> Void
@@ -8,12 +9,13 @@ struct SessionHistoryView: View {
     @State private var loaded = false
     @State private var selectedIDs: [UUID] = []
     @State private var comparisonMode: SessionComparison.Mode = .general
+    @State private var comparisonImages: [UUID: UIImage] = [:]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Historial de sesiones").font(.title2.bold())
-                Text("Solo se guardan resultados, no los vídeos. Son orientativos y no constituyen un diagnóstico.")
+                Text("Se guardan resultados y, solo si las eliges, imágenes. Los vídeos no se guardan. Los resultados son orientativos y no constituyen un diagnóstico.")
                     .foregroundStyle(.secondary)
                 if loaded && sessions.isEmpty {
                     Text("No hay sesiones guardadas.")
@@ -69,7 +71,8 @@ struct SessionHistoryView: View {
                             }
                             .disabled(selectedIDs.count == 2 && !selectedIDs.contains(session.id))
                         }
-                        SessionExportButton(result: session.result, date: session.savedAt)
+                        SessionPhotoView(session: session, onChange: loadComparisonImages)
+                        SessionInsightsView(result: session.result, date: session.savedAt)
                         Button("Eliminar sesión", role: .destructive) {
                             pendingDeletion = session
                         }
@@ -83,6 +86,7 @@ struct SessionHistoryView: View {
             .padding()
         }
         .onAppear(perform: load)
+        .onChange(of: selectedIDs) { _ in loadComparisonImages() }
         .confirmationDialog("¿Eliminar esta sesión?", isPresented: Binding(
             get: { pendingDeletion != nil },
             set: { if !$0 { pendingDeletion = nil } }
@@ -129,6 +133,15 @@ struct SessionHistoryView: View {
             ) {
                 Text(reason).foregroundStyle(.secondary)
             } else {
+                if let firstImage = comparisonImages[baseline.id], let secondImage = comparisonImages[comparison.id] {
+                    Text("Comparación visual").font(.headline)
+                    HStack(alignment: .top) {
+                        VStack { Text("Base"); Image(uiImage: firstImage).resizable().scaledToFit() }
+                        VStack { Text("Segunda"); Image(uiImage: secondImage).resizable().scaledToFit() }
+                    }
+                    Text("Las imágenes se muestran sin alineación automática; el encuadre y la fase de pedaleo pueden ser diferentes.")
+                        .font(.footnote)
+                }
                 if comparisonMode == .general && baseline.result.side != comparison.result.side {
                     Text("Se han analizado lados diferentes; las diferencias pueden reflejar esa variación.")
                         .foregroundStyle(.secondary)
@@ -170,6 +183,25 @@ struct SessionHistoryView: View {
             selectedIDs.remove(at: index)
         } else if selectedIDs.count < 2 {
             selectedIDs.append(session.id)
+        }
+    }
+
+    private func loadComparisonImages() {
+        do {
+            let store = try SessionHistoryStore.standard()
+            var images: [UUID: UIImage] = [:]
+            for id in selectedIDs {
+                guard let session = sessions.first(where: { $0.id == id }),
+                      let data = try store.photo(for: session) else { continue }
+                guard let image = UIImage(data: data) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                images[id] = image
+            }
+            comparisonImages = images
+        } catch {
+            comparisonImages = [:]
+            self.error = "No se pudieron leer las imágenes: \(error.localizedDescription)"
         }
     }
 

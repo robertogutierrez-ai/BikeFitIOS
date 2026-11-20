@@ -54,4 +54,22 @@ final class SessionHistoryStoreTests: XCTestCase {
         try Data([0]).write(to: directory.appendingPathComponent("invalid.json"))
         XCTAssertThrowsError(try SessionHistoryStore(directory: directory).load())
     }
+
+    func testSelectedPhotoIsReplacedAndDeletedWithSession() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = SessionHistoryStore(directory: directory)
+        defer { XCTAssertNoThrow(try FileManager.default.removeItem(at: directory)) }
+        let result = VideoAnalysisResult(ranges: [:], validFrames: 1, sampledFrames: 1, side: "izquierdo")
+        let first = try store.save(result)
+        let second = try store.save(result)
+        XCTAssertNil(try store.photo(for: first))
+        try store.savePhoto(Data([1, 2]), for: first)
+        try store.savePhoto(Data([3]), for: first)
+        try store.savePhoto(Data([4]), for: second)
+        XCTAssertEqual(try store.photo(for: first), Data([3]))
+        try store.delete(first)
+        XCTAssertNil(try store.photo(for: first))
+        XCTAssertEqual(try store.photo(for: second), Data([4]))
+        XCTAssertThrowsError(try store.savePhoto(Data([5]), for: first))
+    }
 }

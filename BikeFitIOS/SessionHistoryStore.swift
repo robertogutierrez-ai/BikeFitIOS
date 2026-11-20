@@ -46,10 +46,35 @@ struct SessionHistoryStore {
     }
 
     func delete(_ session: SavedSession) throws {
+        try deletePhoto(session)
         try FileManager.default.removeItem(at: url(for: session.id))
+    }
+
+    func photo(for session: SavedSession) throws -> Data? {
+        let photo = photoURL(for: session.id)
+        guard FileManager.default.fileExists(atPath: photo.path) else { return nil }
+        return try Data(contentsOf: photo)
+    }
+
+    func savePhoto(_ data: Data, for session: SavedSession) throws {
+        guard FileManager.default.fileExists(atPath: url(for: session.id).path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        try data.write(to: photoURL(for: session.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    func deletePhoto(_ session: SavedSession) throws {
+        let photo = photoURL(for: session.id)
+        if FileManager.default.fileExists(atPath: photo.path) {
+            try FileManager.default.removeItem(at: photo)
+        }
     }
 
     private func url(for id: UUID) -> URL {
         directory.appendingPathComponent(id.uuidString).appendingPathExtension("json")
+    }
+
+    private func photoURL(for id: UUID) -> URL {
+        directory.appendingPathComponent(id.uuidString).appendingPathExtension("jpg")
     }
 }

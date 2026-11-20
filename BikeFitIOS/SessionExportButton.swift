@@ -4,6 +4,7 @@ import UIKit
 struct SessionExportButton: View {
     let result: VideoAnalysisResult
     let date: Date
+    var aiSummary: String? = nil
     @State private var documentURL: URL?
     @State private var showingShare = false
     @State private var error: String?
@@ -36,7 +37,7 @@ struct SessionExportButton: View {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("BikeFit-\(UUID().uuidString).pdf")
         do {
-            let data = SessionPDF.make(result: result, date: date)
+            let data = SessionPDF.make(result: result, date: date, aiSummary: aiSummary)
             try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             documentURL = url
             showingShare = true

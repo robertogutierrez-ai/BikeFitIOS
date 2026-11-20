@@ -42,4 +42,30 @@ final class ReferenceProfileStoreTests: XCTestCase {
         defaults.set("formato incorrecto", forKey: "bikefit.reference-profiles.v1")
         XCTAssertThrowsError(try ReferenceProfileStore(defaults: defaults).profiles())
     }
+
+    func testExtendedProfileAndLegacyDecoding() throws {
+        let legacy = Data("""
+        {"id":"00000000-0000-0000-0000-000000000001","name":"Anterior","ranges":[]}
+        """.utf8)
+        XCTAssertNil(try JSONDecoder().decode(ReferenceProfile.self, from: legacy).bikes)
+        let suite = "ReferenceProfileTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = ReferenceProfileStore(defaults: defaults)
+        let id = UUID()
+        let bike = ProfileBike(id: UUID(), name: "Ruta", type: "Carretera", saddleHeightMM: 720, reachMM: nil)
+        try store.save(id: id, name: "Perfil", ranges: [.knee: AngleRange(minimum: 10, maximum: 30)],
+                       discipline: "Carretera", inseamCM: 80, crankMM: 170, flexibility: "Normal", bikes: [bike])
+        let restored = try XCTUnwrap(store.profiles().first)
+        XCTAssertEqual(restored.discipline, "Carretera")
+        XCTAssertEqual(restored.inseamCM, 80)
+        XCTAssertEqual(restored.bikes?.first?.saddleHeightMM, 720)
+        XCTAssertThrowsError(try store.save(id: id, name: "Perfil", ranges: restored.ranges, inseamCM: -.infinity))
+        XCTAssertThrowsError(try store.save(id: id, name: "Perfil", ranges: restored.ranges,
+                                            bikes: [bike, bike]))
+        XCTAssertEqual(try store.profiles().first?.bikes?.count, 1)
+        try store.save(id: id, name: "Perfil", ranges: [:], bikes: [bike])
+        XCTAssertTrue(try XCTUnwrap(store.profiles().first).ranges.isEmpty)
+        XCTAssertThrowsError(try store.save(id: id, name: "Perfil", ranges: [:], inseamCM: -1))
+    }
 }

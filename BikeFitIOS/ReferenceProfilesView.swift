@@ -8,10 +8,23 @@ struct ReferenceProfilesView: View {
     @State private var name = ""
     @State private var minimums: [JointAngle: String] = [:]
     @State private var maximums: [JointAngle: String] = [:]
+    @State private var discipline = ""
+    @State private var inseam = ""
+    @State private var crank = ""
+    @State private var flexibility = ""
+    @State private var bikes: [BikeDraft] = []
     @State private var error: String?
     @State private var pendingDeletion: ReferenceProfile?
     @State private var loaded = false
     private let store = ReferenceProfileStore()
+
+    private struct BikeDraft: Identifiable {
+        let id: UUID
+        var name: String
+        var type: String
+        var saddle: String
+        var reach: String
+    }
 
     var body: some View {
         ScrollView {
@@ -29,6 +42,15 @@ struct ReferenceProfilesView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(profile.name + (activeID == profile.id ? " · activo" : ""))
                                 .font(.headline)
+                            if let discipline = profile.discipline { Text("Disciplina: \(discipline)") }
+                            if let inseam = profile.inseamCM { Text("Entrepierna: \(String(format: "%.1f", inseam)) cm") }
+                            if let crank = profile.crankMM { Text("Biela: \(String(format: "%.1f", crank)) mm") }
+                            if let flexibility = profile.flexibility { Text("Flexibilidad indicada: \(flexibility)") }
+                            ForEach(profile.bikes ?? []) { bike in
+                                Text("Bicicleta: \(bike.name) · \(bike.type)")
+                                if let saddle = bike.saddleHeightMM { Text("Altura de sillín: \(String(format: "%.1f", saddle)) mm") }
+                                if let reach = bike.reachMM { Text("Alcance: \(String(format: "%.1f", reach)) mm") }
+                            }
                             ForEach(JointAngle.allCases, id: \.self) { angle in
                                 if let range = profile.ranges[angle] {
                                     Text("\(angle.rawValue): \(String(format: "%.1f° – %.1f°", range.minimum, range.maximum))")
@@ -49,6 +71,11 @@ struct ReferenceProfilesView: View {
                         name = ""
                         minimums = [:]
                         maximums = [:]
+                        discipline = ""
+                        inseam = ""
+                        crank = ""
+                        flexibility = ""
+                        bikes = []
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!loaded)
@@ -82,6 +109,36 @@ struct ReferenceProfilesView: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Nombre del perfil", text: $name)
                 .textFieldStyle(.roundedBorder)
+            Text("Datos opcionales; no modifican automáticamente los rangos ni las mediciones.")
+                .font(.footnote)
+            TextField("Disciplina (por ejemplo, carretera)", text: $discipline)
+                .textFieldStyle(.roundedBorder)
+            TextField("Entrepierna (cm)", text: $inseam)
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+            TextField("Longitud de biela (mm)", text: $crank)
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+            TextField("Flexibilidad indicada por ti", text: $flexibility)
+                .textFieldStyle(.roundedBorder)
+            Text("Bicicletas").font(.headline)
+            ForEach($bikes) { $bike in
+                VStack(alignment: .leading) {
+                    TextField("Nombre de la bicicleta", text: $bike.name)
+                    TextField("Tipo (por ejemplo, carretera)", text: $bike.type)
+                    TextField("Altura de sillín (mm, opcional)", text: $bike.saddle)
+                        .keyboardType(.decimalPad)
+                    TextField("Alcance (mm, opcional)", text: $bike.reach)
+                        .keyboardType(.decimalPad)
+                    Button("Eliminar bicicleta", role: .destructive) {
+                        bikes.removeAll { $0.id == bike.id }
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+            }
+            Button("Añadir bicicleta") {
+                bikes.append(BikeDraft(id: UUID(), name: "", type: "", saddle: "", reach: ""))
+            }
             Text("Deja ambos campos vacíos para omitir una métrica. Ángulos en grados.")
                 .font(.footnote)
             ForEach(JointAngle.allCases, id: \.self) { angle in
@@ -115,6 +172,29 @@ struct ReferenceProfilesView: View {
         name = profile.name
         minimums = profile.ranges.mapValues { String($0.minimum) }
         maximums = profile.ranges.mapValues { String($0.maximum) }
+        discipline = profile.discipline ?? ""
+        inseam = profile.inseamCM.map { String($0) } ?? ""
+        crank = profile.crankMM.map { String($0) } ?? ""
+        flexibility = profile.flexibility ?? ""
+        bikes = (profile.bikes ?? []).map {
+            BikeDraft(id: $0.id, name: $0.name, type: $0.type,
+                      saddle: $0.saddleHeightMM.map { String($0) } ?? "",
+                      reach: $0.reachMM.map { String($0) } ?? "")
+        }
+    }
+
+    private func optionalNumber(_ text: String) throws -> Double? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.isEmpty { return nil }
+        guard let number = Double(value.replacingOccurrences(of: ",", with: ".")) else {
+            throw ReferenceProfileError.invalidDetails
+        }
+        return number
+    }
+
+    private func optionalText(_ text: String) -> String? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private func save() {
@@ -131,7 +211,14 @@ struct ReferenceProfilesView: View {
                 }
                 ranges[angle] = AngleRange(minimum: minimum, maximum: maximum)
             }
-            try store.save(id: id, name: name, ranges: ranges)
+            let savedBikes = try bikes.map { bike in
+                ProfileBike(id: bike.id, name: bike.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                            type: bike.type.trimmingCharacters(in: .whitespacesAndNewlines),
+                            saddleHeightMM: try optionalNumber(bike.saddle), reachMM: try optionalNumber(bike.reach))
+            }
+            try store.save(id: id, name: name, ranges: ranges, discipline: optionalText(discipline),
+                           inseamCM: try optionalNumber(inseam), crankMM: try optionalNumber(crank),
+                           flexibility: optionalText(flexibility), bikes: savedBikes)
             editingID = nil
             reload()
         } catch {

@@ -341,7 +341,7 @@ struct ContentView: View {
                     }
                 }
                 .disabled(savedResult)
-                SessionExportButton(result: result, date: Date())
+                SessionInsightsView(result: result, date: Date())
                 if (result.engine ?? .vision) == .vision {
                     Button("Crear vídeo anotado (experimental)") { screen = .annotatedVideo }
                         .buttonStyle(.bordered)
@@ -404,6 +404,9 @@ private struct CaptureScreen: View {
     @StateObject private var camera = CameraCapture()
     @Environment(\.scenePhase) private var scenePhase
     @State private var showGuides = true
+    @AppStorage("bikefit.capture.voice") private var voiceEnabled = false
+    @AppStorage("bikefit.capture.haptics") private var hapticsEnabled = false
+    @State private var speech = AVSpeechSynthesizer()
     let onCancel: () -> Void
     let onFinished: (URL) -> Void
 
@@ -443,6 +446,12 @@ private struct CaptureScreen: View {
             .padding(.horizontal)
             Text(camera.recording ? "Grabando · objetivo: 15 segundos" : "Graba unos 15 segundos · Sin sonido")
                 .font(.caption)
+            HStack {
+                Toggle("Avisos por voz", isOn: $voiceEnabled)
+                Toggle("Vibración", isOn: $hapticsEnabled)
+            }
+            .font(.caption)
+            .padding(.horizontal)
             if camera.starting {
                 ProgressView("Iniciando cámara…")
             } else if !camera.ready {
@@ -460,11 +469,13 @@ private struct CaptureScreen: View {
                 Button(camera.recording ? "Detener y revisar" : "Iniciar grabación") {
                     if camera.recording {
                         camera.stop()
+                        announce("Finalizando grabación.")
                     } else {
                         let orientation = UIApplication.shared.connectedScenes
                             .compactMap { $0 as? UIWindowScene }
                             .first { $0.activationState == .foregroundActive }?.interfaceOrientation
                         camera.record(orientation: currentVideoOrientation(orientation))
+                        if camera.recording { announce("Grabación iniciada.") }
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -476,7 +487,10 @@ private struct CaptureScreen: View {
             camera.onFinished = onFinished
             camera.start()
         }
-        .onDisappear { camera.shutdown() }
+        .onDisappear {
+            camera.shutdown()
+            speech.stopSpeaking(at: .immediate)
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active {
                 camera.start()
@@ -491,6 +505,18 @@ private struct CaptureScreen: View {
             Button("Aceptar", role: .cancel) {}
         } message: {
             Text(camera.errorMessage ?? "")
+        }
+    }
+
+    private func announce(_ message: String) {
+        if voiceEnabled {
+            speech.stopSpeaking(at: .immediate)
+            let utterance = AVSpeechUtterance(string: message)
+            utterance.voice = AVSpeechSynthesisVoice(language: "es-ES")
+            speech.speak(utterance)
+        }
+        if hapticsEnabled {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }
 }

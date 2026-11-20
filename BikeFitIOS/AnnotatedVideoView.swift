@@ -36,19 +36,6 @@ struct AnnotatedVideoView: View {
                         .buttonStyle(.borderedProminent)
                 }
 
-                private struct AnnotatedVideoPreview: View {
-                    @State private var player: AVPlayer
-
-                    init(url: URL) {
-                        _player = State(initialValue: AVPlayer(url: url))
-                    }
-
-                    var body: some View {
-                        VideoPlayer(player: player)
-                            .frame(height: 240)
-                            .onDisappear { player.pause() }
-                    }
-                }
                 Button("Volver a resultados") {
                     if exporter.removeFile() { onClose() }
                 }
@@ -59,6 +46,20 @@ struct AnnotatedVideoView: View {
         .sheet(isPresented: $showingShare) {
             if let fileURL = exporter.fileURL {
                 ShareDocument(url: fileURL).ignoresSafeArea()
+            }
+        }
+
+        private struct AnnotatedVideoPreview: View {
+            @State private var player: AVPlayer
+
+            init(url: URL) {
+                _player = State(initialValue: AVPlayer(url: url))
+            }
+
+            var body: some View {
+                VideoPlayer(player: player)
+                    .frame(height: 240)
+                    .onDisappear { player.pause() }
             }
         }
         .onDisappear {

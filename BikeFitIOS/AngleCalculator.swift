@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-enum JointAngle: String, CaseIterable {
+enum JointAngle: String, CaseIterable, Codable {
     case knee = "Rodilla"
     case hip = "Cadera"
     case elbow = "Codo"

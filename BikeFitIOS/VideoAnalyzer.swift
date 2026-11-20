@@ -2,12 +2,12 @@ import AVFoundation
 import Foundation
 import Vision
 
-struct AngleRange {
+struct AngleRange: Codable {
     var minimum: Double
     var maximum: Double
 }
 
-struct VideoAnalysisResult {
+struct VideoAnalysisResult: Codable {
     let ranges: [JointAngle: AngleRange]
     let validFrames: Int
     let sampledFrames: Int

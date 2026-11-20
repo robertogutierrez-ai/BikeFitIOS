@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, review, results, cleats
+        case home, capture, review, results, cleats, history
     }
 
     @State private var screen: Screen = .home
@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var selectedVideo: PhotosPickerItem?
     @State private var isImporting = false
     @State private var importError: String?
+    @State private var savedResult = false
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,8 @@ struct ContentView: View {
                     }
                 case .cleats:
                     CleatAssistantView(onClose: { screen = .home })
+                case .history:
+                    SessionHistoryView(onClose: { screen = .home })
                 }
             }
             .navigationTitle("BikeFit")
@@ -108,6 +111,12 @@ struct ContentView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isImporting)
+                Divider()
+                Text("Sesiones guardadas").font(.title2.bold())
+                Text("Consulta o elimina los resultados que hayas guardado en este dispositivo.")
+                Button("Ver historial de sesiones") { screen = .history }
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
             }
             .padding()
         }
@@ -151,6 +160,7 @@ struct ContentView: View {
                 }
                 try Task.checkCancellation()
                 result = measured
+                savedResult = false
                 screen = .results
             } catch is CancellationError {
                 analysisError = nil
@@ -182,6 +192,17 @@ struct ContentView: View {
                 Text("Esta primera versión utiliza Apple Vision, no MediaPipe. Los resultados pueden diferir de Android y no se han validado clínicamente.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Text("Puedes guardar estos resultados en el historial local; el vídeo no se guarda.")
+                    .font(.footnote)
+                Button(savedResult ? "Resultados guardados" : "Guardar resultados") {
+                    do {
+                        _ = try SessionHistoryStore.standard().save(result)
+                        savedResult = true
+                    } catch {
+                        analysisError = "No se pudieron guardar los resultados: \(error.localizedDescription)"
+                    }
+                }
+                .disabled(savedResult)
                 Button("Volver al vídeo") { screen = .review }
                     .buttonStyle(.borderedProminent)
                 Button("Finalizar") {
@@ -193,7 +214,7 @@ struct ContentView: View {
             }
             .padding()
         }
-        .alert("No se pudo eliminar el vídeo", isPresented: Binding(
+        .alert("Resultados", isPresented: Binding(
             get: { analysisError != nil },
             set: { if !$0 { analysisError = nil } }
         )) {

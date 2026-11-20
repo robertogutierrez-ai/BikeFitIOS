@@ -203,6 +203,7 @@ struct ContentView: View {
                     }
                 }
                 .disabled(savedResult)
+                SessionExportButton(result: result, date: Date())
                 Button("Volver al vídeo") { screen = .review }
                     .buttonStyle(.borderedProminent)
                 Button("Finalizar") {

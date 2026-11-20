@@ -41,6 +41,7 @@ struct SessionHistoryView: View {
                             }
                             .disabled(selectedIDs.count == 2 && !selectedIDs.contains(session.id))
                         }
+                        SessionExportButton(result: session.result, date: session.savedAt)
                         Button("Eliminar sesión", role: .destructive) {
                             pendingDeletion = session
                         }

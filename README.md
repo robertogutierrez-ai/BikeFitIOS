@@ -36,6 +36,10 @@ Fotografía cada suela con la cámara trasera, perpendicular a ella y manteniend
 
 Las mediciones dependen de la perspectiva y el marcado, no se han validado con un iPhone real y no son un diagnóstico ni una recomendación de ajuste. Si el usuario lo elige, la app guarda localmente hasta 10 resultados con fecha, comodidad, síntoma y nota; permite compararlos con la última medición y eliminar registros. Las fotos no se guardan ni se envían a servidores.
 
+## KOPS manual experimental
+
+Desde el inicio puedes seleccionar una fotografía lateral y marcar los extremos de una referencia de longitud conocida, un punto de la rodilla y el centro del eje del pedal. La referencia debe estar en el mismo plano y la cámara nivelada y perpendicular; usa una foto con la biela aproximadamente horizontal. La app estima el desplazamiento horizontal en milímetros, positivo hacia la derecha de la imagen. No identifica la anatomía ni la fase del pedaleo, no indica automáticamente delante o detrás, y no aplica la escala al análisis de vídeo. La perspectiva y el marcado pueden introducir errores importantes; el resultado no es clínico ni una recomendación de ajuste. La foto y el resultado no se guardan en el historial. Esta función no se ha validado en iPhone.
+
 ## Compilar y probar en un Mac
 
 ### Requisitos
@@ -89,4 +93,4 @@ La prueba de exportación del vídeo anotado usa un detector simulado para compr
 
 ## Privacidad
 
-El vídeo permanece en el almacenamiento temporal de la aplicación y el análisis se realiza localmente. Las fotos de calas solo se usan durante el asistente y no se guardan. El historial de calas, los perfiles y los resultados de sesiones guardados se almacenan localmente; el sistema puede incluirlos en las copias de seguridad del dispositivo. No se envían imágenes a servidores desde este prototipo. No subir vídeos ni fotos de prueba, certificados ni claves privadas al repositorio.
+El vídeo permanece en el almacenamiento temporal de la aplicación y el análisis se realiza localmente. Las fotos de calas y KOPS solo se usan durante sus asistentes y no se guardan en la app; la fotografía original de la fototeca no se modifica. El historial de calas, los perfiles y los resultados de sesiones guardados se almacenan localmente; el sistema puede incluirlos en las copias de seguridad del dispositivo. No se envían imágenes a servidores desde este prototipo. No subir vídeos ni fotos de prueba, certificados ni claves privadas al repositorio.

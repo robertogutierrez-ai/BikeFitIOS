@@ -35,7 +35,10 @@ struct CleatAssistantView: View {
                 } else if let image = image {
                     Text("Zapatilla \(side == 0 ? "izquierda" : "derecha")").font(.headline)
                     Text(points.count < 4 ? instructions[points.count] : "Comprueba los cuatro puntos antes de continuar.")
-                    CleatMarkingView(image: image, points: $points)
+                    ImagePointMarkingView(
+                        image: image, points: $points,
+                        accessibilityDescription: "Fotografía de la suela. Toca los puntos indicados para marcar los ejes."
+                    )
                         .frame(height: 340)
                     Text("Azul: eje de la zapatilla · Naranja: eje de la cala")
                         .font(.caption)
@@ -278,9 +281,10 @@ struct CleatAssistantView: View {
     }
 }
 
-private struct CleatMarkingView: View {
+struct ImagePointMarkingView: View {
     let image: UIImage
     @Binding var points: [CGPoint]
+    let accessibilityDescription: String
 
     var body: some View {
         GeometryReader { geometry in
@@ -317,7 +321,7 @@ private struct CleatMarkingView: View {
             })
         }
         .background(.black)
-        .accessibilityLabel("Fotografía de la suela. Toca los puntos indicados para marcar los ejes.")
+        .accessibilityLabel(accessibilityDescription)
     }
 
     private func imageRect(imageSize: CGSize, available: CGSize) -> CGRect {

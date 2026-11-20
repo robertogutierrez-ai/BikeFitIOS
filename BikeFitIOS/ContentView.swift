@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, live, review, results, annotatedVideo, cleats, history, profiles
+        case home, capture, live, review, results, annotatedVideo, cleats, kops, history, profiles
     }
 
     @State private var screen: Screen = .home
@@ -50,6 +50,8 @@ struct ContentView: View {
                     }
                 case .cleats:
                     CleatAssistantView(onClose: { screen = .home })
+                case .kops:
+                    KopsAssistantView(onClose: { screen = .home })
                 case .history:
                     SessionHistoryView(onClose: { screen = .home })
                 case .profiles:
@@ -128,6 +130,12 @@ struct ContentView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isImporting)
+                Divider()
+                Text("Medición KOPS manual").font(.title2.bold())
+                Text("Usa una fotografía lateral y una referencia de longitud conocida.")
+                Button("Abrir asistente KOPS") { screen = .kops }
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
                 Divider()
                 Text("Sesiones guardadas").font(.title2.bold())
                 Text("Consulta o elimina los resultados que hayas guardado en este dispositivo.")

@@ -48,20 +48,6 @@ struct AnnotatedVideoView: View {
                 ShareDocument(url: fileURL).ignoresSafeArea()
             }
         }
-
-        private struct AnnotatedVideoPreview: View {
-            @State private var player: AVPlayer
-
-            init(url: URL) {
-                _player = State(initialValue: AVPlayer(url: url))
-            }
-
-            var body: some View {
-                VideoPlayer(player: player)
-                    .frame(height: 240)
-                    .onDisappear { player.pause() }
-            }
-        }
         .onDisappear {
             if exporter.exporting { exporter.cancel() }
         }
@@ -72,6 +58,20 @@ struct AnnotatedVideoView: View {
             Button("Aceptar", role: .cancel) {}
         } message: {
             Text(exporter.errorMessage ?? "")
+        }
+    }
+
+    private struct AnnotatedVideoPreview: View {
+        @State private var player: AVPlayer
+
+        init(url: URL) {
+            _player = State(initialValue: AVPlayer(url: url))
+        }
+
+        var body: some View {
+            VideoPlayer(player: player)
+                .frame(height: 240)
+                .onDisappear { player.pause() }
         }
     }
 }

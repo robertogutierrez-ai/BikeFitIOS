@@ -13,7 +13,7 @@ final class AnnotatedVideoExport: ObservableObject {
     private var session: AVAssetExportSession?
     private var progressTimer: Timer?
 
-    func start(url: URL, sideTitle: String) {
+    func start(url: URL, sideTitle: String, engine: AnalysisEngine) {
         guard !exporting, fileURL == nil else { return }
         guard let side = VideoAnalyzer.Side.allCases.first(where: { $0.title == sideTitle }) else {
             errorMessage = "El lado seleccionado para el análisis no es válido."
@@ -30,7 +30,17 @@ final class AnnotatedVideoExport: ObservableObject {
             .appendingPathComponent("BikeFit-anotado-\(UUID().uuidString).mp4")
         session.outputURL = output
         session.outputFileType = .mp4
-        session.videoComposition = AnnotatedVideoRenderer.composition(for: asset, side: side)
+        do {
+            switch engine {
+            case .vision:
+                session.videoComposition = AnnotatedVideoRenderer.composition(for: asset, side: side)
+            case .mediaPipe:
+                session.videoComposition = try AnnotatedVideoRenderer.mediaPipeComposition(for: asset, side: side)
+            }
+        } catch {
+            errorMessage = "No se pudo preparar el vídeo anotado: \(error.localizedDescription)"
+            return
+        }
         session.shouldOptimizeForNetworkUse = true
         self.session = session
         fileURL = output

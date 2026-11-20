@@ -18,6 +18,8 @@ struct ContentView: View {
     @State private var isImporting = false
     @State private var importError: String?
     @State private var savedResult = false
+    @State private var savedSession: SavedSession?
+    @State private var writingPhaseImages = false
     @State private var activeProfile: ReferenceProfile?
     @State private var analysisID: UUID?
     @State private var analysisProgress: Double?
@@ -35,7 +37,11 @@ struct ContentView: View {
                         screen = .review
                     })
                 case .live:
-                    LiveAnalysisView(onClose: { screen = .home })
+                    LiveAnalysisView(onClose: { screen = .home }, onRecorded: { url in
+                        videoURL = url
+                        result = nil
+                        screen = .review
+                    })
                 case .frontal:
                     LiveAnalysisView(mode: .frontal, onClose: { screen = .home })
                 case .silhouettes:
@@ -56,7 +62,7 @@ struct ContentView: View {
                     }
                 case .annotatedVideo:
                     if let url = videoURL, let result = result {
-                        AnnotatedVideoView(url: url, side: result.side, onClose: { screen = .results })
+                        AnnotatedVideoView(url: url, side: result.side, engine: result.engine ?? .vision, onClose: { screen = .results })
                     }
                 case .cleats:
                     CleatAssistantView(onClose: { screen = .home })
@@ -243,6 +249,7 @@ struct ContentView: View {
                 try Task.checkCancellation()
                 result = measured
                 savedResult = false
+                savedSession = nil
                 screen = .results
             } catch is CancellationError {
                 analysisError = nil
@@ -275,6 +282,19 @@ struct ContentView: View {
                     Text("Estimación experimental basada en la rodilla. La detección puede omitir ciclos y no mide la calidad del ajuste.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+                if let spread = result.kneeHorizontalSpreadPercent {
+                    Text(String(format: "Dispersión horizontal de rodilla: %.1f %% del ancho de imagen", spread))
+                        .font(.footnote)
+                    Text("Desviación estándar de los puntos 2D observados; depende del encuadre y no mide una oscilación clínica.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if let phases = result.phases, !phases.isEmpty {
+                    ForEach(phases, id: \.kind.rawValue) { phase in
+                        Text(String(format: "%@: %.2f s", phase.kind.title, phase.time))
+                    }
+                    Text("Extremos 2D aproximados, no fases anatómicas verificadas; el punto adelantado depende de la dirección estimada o calibrada.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 if result.engine == .mediaPipe, let samples = result.timeline {
                     let footCount = samples.filter { $0.angles[.footInclination] != nil }.count
@@ -324,7 +344,7 @@ struct ContentView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal; la del pie no distingue punta arriba o abajo. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
+                Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal; la del pie no distingue punta arriba o abajo. El ángulo del tronco depende de la dirección en la imagen. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Text("Los resultados pueden diferir de Android y no se han validado clínicamente.")
@@ -334,30 +354,30 @@ struct ContentView: View {
                     .font(.footnote)
                 Button(savedResult ? "Resultados guardados" : "Guardar resultados") {
                     do {
-                        _ = try SessionHistoryStore.standard().save(result)
+                        savedSession = try SessionHistoryStore.standard().save(result)
                         savedResult = true
                     } catch {
                         analysisError = "No se pudieron guardar los resultados: \(error.localizedDescription)"
                     }
                 }
                 .disabled(savedResult)
-                SessionInsightsView(result: result, date: Date())
-                if (result.engine ?? .vision) == .vision {
-                    Button("Crear vídeo anotado (experimental)") { screen = .annotatedVideo }
-                        .buttonStyle(.bordered)
-                } else {
-                    Text("El vídeo anotado solo está disponible para resultados de Apple Vision.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                if let session = savedSession, let url = videoURL {
+                    PhaseImagesView(session: session, videoURL: url, onBusyChange: { writingPhaseImages = $0 })
                 }
+                SessionInsightsView(result: result, date: Date())
+                Button("Crear vídeo anotado (experimental)") { screen = .annotatedVideo }
+                    .buttonStyle(.bordered)
+                    .disabled(writingPhaseImages)
                 Button("Volver al vídeo") { screen = .review }
                     .buttonStyle(.borderedProminent)
+                    .disabled(writingPhaseImages)
                 Button("Finalizar") {
                     if removeVideo() {
                         self.result = nil
                         screen = .home
                     }
                 }
+                .disabled(writingPhaseImages)
             }
             .padding()
         }

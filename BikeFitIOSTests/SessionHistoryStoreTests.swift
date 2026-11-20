@@ -13,7 +13,9 @@ final class SessionHistoryStoreTests: XCTestCase {
             ranges: [.knee: AngleRange(minimum: 10, maximum: 25)],
             validFrames: 5, sampledFrames: 8, side: "izquierdo",
             timeline: [AngleSample(time: 0.4, angles: [.knee: 10])],
-            kops: KopsVideoResult(offsetMillimeters: 12, time: 0.4, validSamples: 4, facingRight: true)
+            kops: KopsVideoResult(offsetMillimeters: 12, time: 0.4, validSamples: 4, facingRight: true),
+            phases: [PedalingPhase(kind: .top, time: 0.4)],
+            kneeHorizontalSpreadPercent: 3.5
         )
         let first = try store.save(result)
         let second = try store.save(result)
@@ -29,6 +31,9 @@ final class SessionHistoryStoreTests: XCTestCase {
         XCTAssertEqual(restored.result.timeline?.first?.angles[.knee], 10)
         XCTAssertEqual(restored.result.kops?.offsetMillimeters, 12)
         XCTAssertEqual(restored.result.kops?.validSamples, 4)
+        XCTAssertEqual(restored.result.phases?.first?.kind, .top)
+        XCTAssertEqual(restored.result.phases?.first?.time, 0.4)
+        XCTAssertEqual(restored.result.kneeHorizontalSpreadPercent, 3.5)
 
         try store.delete(first)
         let remaining = try store.load()
@@ -44,6 +49,8 @@ final class SessionHistoryStoreTests: XCTestCase {
         XCTAssertNil(result.estimatedCycles)
         XCTAssertNil(result.engine)
         XCTAssertNil(result.kops)
+        XCTAssertNil(result.phases)
+        XCTAssertNil(result.kneeHorizontalSpreadPercent)
         XCTAssertEqual(result.validFrames, 1)
     }
 
@@ -66,10 +73,16 @@ final class SessionHistoryStoreTests: XCTestCase {
         try store.savePhoto(Data([1, 2]), for: first)
         try store.savePhoto(Data([3]), for: first)
         try store.savePhoto(Data([4]), for: second)
+        try store.savePhaseImages(["top": Data([8])], for: first)
+        try store.savePhaseImages(["bottom": Data([9])], for: second)
         XCTAssertEqual(try store.photo(for: first), Data([3]))
+        XCTAssertEqual(try store.phaseImages(for: first)["top"], Data([8]))
         try store.delete(first)
         XCTAssertNil(try store.photo(for: first))
+        XCTAssertTrue(try store.phaseImages(for: first).isEmpty)
+        XCTAssertEqual(try store.phaseImages(for: second)["bottom"], Data([9]))
         XCTAssertEqual(try store.photo(for: second), Data([4]))
         XCTAssertThrowsError(try store.savePhoto(Data([5]), for: first))
+        XCTAssertThrowsError(try store.savePhaseImages(["top": Data([8])], for: first))
     }
 }

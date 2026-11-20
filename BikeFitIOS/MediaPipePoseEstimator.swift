@@ -16,16 +16,22 @@ struct MediaPipeMeasurement {
 }
 
 final class MediaPipePoseEstimator {
-    private let landmarker: PoseLandmarker
+    enum Mode {
+        case video, image
+    }
 
-    init() throws {
+    private let landmarker: PoseLandmarker
+    private let mode: Mode
+
+    init(mode: Mode = .video) throws {
         guard let model = Bundle.main.path(forResource: "pose_landmarker_full", ofType: "task") else {
             throw PoseError.modelMissing
         }
         let options = PoseLandmarkerOptions()
         options.baseOptions.modelAssetPath = model
-        options.runningMode = .video
+        options.runningMode = mode == .video ? .video : .image
         options.numPoses = 1
+        self.mode = mode
         landmarker = try PoseLandmarker(options: options)
     }
 
@@ -33,7 +39,13 @@ final class MediaPipePoseEstimator {
         guard time.isFinite, time >= 0, time < Double(Int.max) / 1000 else { throw PoseError.invalidTimestamp }
         let rgba = try Self.rgbaImage(image)
         let input = try MPImage(uiImage: UIImage(cgImage: rgba))
-        let result = try landmarker.detect(videoFrame: input, timestampInMilliseconds: Int((time * 1000).rounded()))
+        let result: PoseLandmarkerResult
+        switch mode {
+        case .video:
+            result = try landmarker.detect(videoFrame: input, timestampInMilliseconds: Int((time * 1000).rounded()))
+        case .image:
+            result = try landmarker.detect(image: input)
+        }
         guard let pose = result.landmarks.first else { return [:] }
         guard pose.count >= 33 else { throw PoseError.invalidLandmarks }
         let landmarks = pose.map {

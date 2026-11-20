@@ -43,6 +43,11 @@ struct SessionHistoryView: View {
                         if let cycles = session.result.estimatedCycles {
                             Text("Ciclos aproximados: \(cycles) · estimación experimental")
                         }
+                        if let spread = session.result.kneeHorizontalSpreadPercent {
+                            Text(String(format: "Dispersión horizontal de rodilla: %.1f %% del ancho de imagen", spread))
+                            Text("Desviación estándar de puntos 2D; depende del encuadre y no mide una oscilación clínica.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                         if let kops = session.result.kops {
                             if let offset = kops.offsetMillimeters, let time = kops.time {
                                 Text(String(format: "KOPS experimental: %+.1f mm · %.2f s · %d muestras", offset, time, kops.validSamples))
@@ -72,6 +77,7 @@ struct SessionHistoryView: View {
                             .disabled(selectedIDs.count == 2 && !selectedIDs.contains(session.id))
                         }
                         SessionPhotoView(session: session, onChange: loadComparisonImages)
+                        PhaseImagesView(session: session)
                         SessionInsightsView(result: session.result, date: session.savedAt)
                         Button("Eliminar sesión", role: .destructive) {
                             pendingDeletion = session

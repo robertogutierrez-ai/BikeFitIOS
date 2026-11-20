@@ -47,6 +47,7 @@ struct SessionHistoryStore {
 
     func delete(_ session: SavedSession) throws {
         try deletePhoto(session)
+        try deletePhaseImages(session)
         try FileManager.default.removeItem(at: url(for: session.id))
     }
 
@@ -70,11 +71,36 @@ struct SessionHistoryStore {
         }
     }
 
+    func phaseImages(for session: SavedSession) throws -> [String: Data] {
+        let file = phaseURL(for: session.id)
+        guard FileManager.default.fileExists(atPath: file.path) else { return [:] }
+        return try PropertyListDecoder().decode([String: Data].self, from: Data(contentsOf: file))
+    }
+
+    func savePhaseImages(_ images: [String: Data], for session: SavedSession) throws {
+        guard FileManager.default.fileExists(atPath: url(for: session.id).path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let data = try PropertyListEncoder().encode(images)
+        try data.write(to: phaseURL(for: session.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    func deletePhaseImages(_ session: SavedSession) throws {
+        let file = phaseURL(for: session.id)
+        if FileManager.default.fileExists(atPath: file.path) {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
+
     private func url(for id: UUID) -> URL {
         directory.appendingPathComponent(id.uuidString).appendingPathExtension("json")
     }
 
     private func photoURL(for id: UUID) -> URL {
         directory.appendingPathComponent(id.uuidString).appendingPathExtension("jpg")
+    }
+
+    private func phaseURL(for id: UUID) -> URL {
+        directory.appendingPathComponent(id.uuidString).appendingPathExtension("phases")
     }
 }

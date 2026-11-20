@@ -7,10 +7,15 @@ struct LiveAnalysisView: View {
     @Environment(\.scenePhase) private var scenePhase
     private let mode: LiveAnalysisCamera.Mode
     let onClose: () -> Void
+    let onRecorded: ((URL) -> Void)?
+    @State private var recordVideo = false
+    @State private var saved = false
 
-    init(mode: LiveAnalysisCamera.Mode = .lateral, onClose: @escaping () -> Void) {
+    init(mode: LiveAnalysisCamera.Mode = .lateral, onClose: @escaping () -> Void,
+         onRecorded: ((URL) -> Void)? = nil) {
         self.mode = mode
         self.onClose = onClose
+        self.onRecorded = onRecorded
         _camera = StateObject(wrappedValue: LiveAnalysisCamera(mode: mode))
     }
 
@@ -20,7 +25,7 @@ struct LiveAnalysisView: View {
                 .font(.headline)
             Text(mode == .frontal
                  ? "Coloca el iPhone fijo frente a la bicicleta, con ambas piernas visibles. No se graba vídeo."
-                 : "Coloca el iPhone fijo y de lado, con todo el cuerpo visible. No se graba vídeo.")
+                 : "Coloca el iPhone fijo y de lado, con todo el cuerpo visible. La grabación es opcional.")
                 .font(.subheadline)
                 .padding(.horizontal)
             GeometryReader { geometry in
@@ -78,13 +83,56 @@ struct LiveAnalysisView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
+            if mode == .lateral {
+                if camera.finalizing {
+                    ProgressView("Finalizando sesión…")
+                } else if camera.collecting {
+                    Button(camera.startingRecording ? "Iniciando grabación…" : "Finalizar sesión") {
+                        camera.endSession()
+                    }
+                    .disabled(camera.startingRecording)
+                } else {
+                    Toggle("Grabar vídeo sin sonido", isOn: $recordVideo)
+                        .disabled(!camera.canRecordVideo || camera.recordedURL != nil)
+                        .padding(.horizontal)
+                    Button("Iniciar sesión") {
+                        saved = false
+                        camera.beginSession(recordVideo: recordVideo)
+                    }
+                    .disabled(!camera.ready || camera.switching || camera.recordedURL != nil)
+                    if let result = camera.sessionResult {
+                        Text("Sesión: lado \(result.side) · \(result.validFrames)/\(result.sampledFrames) muestras · \(result.estimatedCycles ?? 0) ciclos aproximados")
+                            .font(.footnote)
+                        Button(saved ? "Sesión guardada" : "Guardar sesión") {
+                            do {
+                                _ = try SessionHistoryStore.standard().save(result)
+                                saved = true
+                            } catch {
+                                camera.errorMessage = "No se pudo guardar la sesión: \(error.localizedDescription)"
+                            }
+                        }
+                        .disabled(saved)
+                    }
+                    if camera.recordedURL != nil {
+                        Button("Revisar y analizar el vídeo grabado") {
+                            if let url = camera.takeRecording() { onRecorded?(url) }
+                        }
+                        .disabled(onRecorded == nil)
+                        Button("Eliminar grabación temporal") { _ = camera.removeRecording() }
+                    }
+                    Text("La sesión usa Vision, suaviza los ángulos con hasta cuatro muestras y estima ciclos con la rodilla. La grabación puede analizarse después con MediaPipe. No detecta la calidad del ajuste.")
+                        .font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+                }
+            }
             HStack {
-                Button("Cerrar", action: onClose)
+                Button("Cerrar") {
+                    if camera.removeRecording() { onClose() }
+                }
                 Spacer()
                 Button(camera.position == .back ? "Usar cámara frontal" : "Usar cámara trasera") {
                     camera.switchCamera()
                 }
-                .disabled(!camera.ready || camera.switching)
+                .disabled(!camera.ready || camera.switching || camera.collecting || camera.finalizing)
             }
             .padding(.horizontal)
         }
@@ -98,6 +146,9 @@ struct LiveAnalysisView: View {
             } else {
                 camera.shutdown()
             }
+        }
+        .onChange(of: camera.canRecordVideo) { available in
+            if !available { recordVideo = false }
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVCaptureSessionRuntimeError, object: camera.session).receive(on: DispatchQueue.main)) { notification in
             let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error

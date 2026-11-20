@@ -60,4 +60,11 @@ final class AngleCalculatorTests: XCTestCase {
         XCTAssertNil(AngleCalculator.calculate(points, width: 200, height: 100)[.ankle])
         XCTAssertNil(AngleCalculator.calculate(points, width: 200, height: 100)[.footInclination])
     }
+
+    func testDirectedTrunkDependsOnImageDirection() throws {
+        let hip = CGPoint(x: 0, y: 0)
+        XCTAssertEqual(try XCTUnwrap(AngleCalculator.directedTrunk(shoulder: CGPoint(x: 1, y: 1), hip: hip)), 45, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(AngleCalculator.directedTrunk(shoulder: CGPoint(x: -1, y: 1), hip: hip)), 135, accuracy: 0.001)
+        XCTAssertNil(AngleCalculator.directedTrunk(shoulder: hip, hip: hip))
+    }
 }

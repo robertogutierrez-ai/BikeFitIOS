@@ -13,6 +13,33 @@ enum AnnotatedVideoRenderer {
         for asset: AVAsset, side: VideoAnalyzer.Side,
         detectPose: @escaping (CIImage) throws -> VNHumanBodyPoseObservation?
     ) -> AVVideoComposition {
+        composition(for: asset, side: side, detectPoints: { image in
+            guard let observation = try detectPose(image) else { return nil }
+            return try VideoAnalyzer.points(for: side, observation: observation)
+        })
+    }
+
+    static func mediaPipeComposition(for asset: AVAsset, side: VideoAnalyzer.Side) throws -> AVVideoComposition {
+        let estimator = try MediaPipePoseEstimator(mode: .image)
+        let context = CIContext()
+        let lock = NSLock()
+        return composition(for: asset, side: side, detectPoints: { image in
+            let extent = image.extent
+            let scale = min(1, 1280 / max(extent.width, extent.height))
+            let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            guard let frame = context.createCGImage(scaled, from: scaled.extent) else {
+                throw RenderError.invalidFrame
+            }
+            lock.lock()
+            defer { lock.unlock() }
+            return try estimator.measure(image: frame, time: 0)[side]?.points
+        })
+    }
+
+    private static func composition(
+        for asset: AVAsset, side: VideoAnalyzer.Side,
+        detectPoints: @escaping (CIImage) throws -> BodyPoints?
+    ) -> AVVideoComposition {
         AVVideoComposition(asset: asset) { request in
             do {
                 let source = request.sourceImage
@@ -20,8 +47,7 @@ enum AnnotatedVideoRenderer {
                 guard extent.minX.isFinite, extent.minY.isFinite,
                       extent.width.isFinite, extent.height.isFinite,
                       extent.width > 0, extent.height > 0 else { throw RenderError.invalidFrame }
-                guard let observation = try detectPose(source),
-                      let points = try VideoAnalyzer.points(for: side, observation: observation) else {
+                guard let points = try detectPoints(source) else {
                     request.finish(with: source, context: nil)
                     return
                 }

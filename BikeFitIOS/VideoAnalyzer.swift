@@ -26,6 +26,8 @@ struct VideoAnalysisResult: Codable {
     var estimatedCycles: Int? = nil
     var engine: AnalysisEngine? = nil
     var kops: KopsVideoResult? = nil
+    var phases: [PedalingPhase]? = nil
+    var kneeHorizontalSpreadPercent: Double? = nil
 }
 
 enum VideoAnalyzer {
@@ -106,10 +108,12 @@ enum VideoAnalyzer {
             }
         }
         var detector = PedalingDetector()
+        var phaseTracker = PedalingPhases()
         for sample in validSamples {
             if let knee = sample.angles[.knee] {
                 try detector.add(kneeAngle: knee, time: sample.time)
             }
+            if let points = sample.points { phaseTracker.add(points: points, time: sample.time) }
         }
         var kopsResult: KopsVideoResult?
         if let calibration = kopsCalibration {
@@ -129,7 +133,9 @@ enum VideoAnalyzer {
             timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) },
             estimatedCycles: detector.cycles,
             engine: engine,
-            kops: kopsResult
+            kops: kopsResult,
+            phases: phaseTracker.phases(cycles: detector.cycles, calibratedFacingRight: kopsCalibration?.facingRight),
+            kneeHorizontalSpreadPercent: phaseTracker.kneeHorizontalSpreadPercent
         )
     }
 
@@ -147,9 +153,16 @@ enum VideoAnalyzer {
             case .vision(let request):
                 try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
                 guard let observation = request.results?.first else { return [:] }
-                return try VideoAnalyzer.measuredAngles(
-                    observation: observation, width: CGFloat(image.width), height: CGFloat(image.height)
-                ).mapValues { Measurement(angles: $0, points: nil) }
+                var measured: [Side: Measurement] = [:]
+                for side in Side.allCases {
+                    if let points = try VideoAnalyzer.points(for: side, observation: observation) {
+                        let angles = AngleCalculator.calculate(points, width: CGFloat(image.width), height: CGFloat(image.height))
+                        if AngleCalculator.requiredAngles.allSatisfy({ angles[$0] != nil }) {
+                            measured[side] = Measurement(angles: angles, points: points)
+                        }
+                    }
+                }
+                return measured
             case .mediaPipe(let estimator):
                 return try estimator.measure(image: image, time: time).mapValues {
                     Measurement(angles: $0.angles, points: $0.points)

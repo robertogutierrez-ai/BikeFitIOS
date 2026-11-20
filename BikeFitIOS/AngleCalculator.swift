@@ -10,6 +10,7 @@ enum JointAngle: String, CaseIterable, Codable {
     case thighInclination = "Inclinación de muslo"
     case ankle = "Tobillo"
     case footInclination = "Inclinación del pie"
+    case trunk = "Ángulo del tronco"
 }
 
 struct BodyPoints {
@@ -59,7 +60,8 @@ enum AngleCalculator {
             (.elbow, angle(shoulder, elbow, wrist)),
             (.shoulder, angle(hip, shoulder, elbow)),
             (.backInclination, inclination(shoulder, hip)),
-            (.thighInclination, inclination(hip, knee))
+            (.thighInclination, inclination(hip, knee)),
+            (.trunk, directedTrunk(shoulder: shoulder, hip: hip))
         ]
         if let foot = points.foot.map(pixel) {
             values.append((.ankle, angle(knee, ankle, foot)))
@@ -68,5 +70,12 @@ enum AngleCalculator {
         return Dictionary(uniqueKeysWithValues: values.compactMap { key, value in
             value.map { (key, $0) }
         })
+    }
+
+    static func directedTrunk(shoulder: CGPoint, hip: CGPoint) -> Double? {
+        let dx = shoulder.x - hip.x
+        let dy = shoulder.y - hip.y
+        guard dx.isFinite, dy.isFinite, dx != 0 || dy != 0 else { return nil }
+        return abs(Double(atan2(dy, dx)) * 180 / Double.pi)
     }
 }

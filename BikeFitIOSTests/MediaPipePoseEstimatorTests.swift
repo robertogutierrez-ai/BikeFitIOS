@@ -60,5 +60,8 @@ final class MediaPipePoseEstimatorTests: XCTestCase {
         let image = try XCTUnwrap(context.makeImage())
         let estimator = try MediaPipePoseEstimator()
         XCTAssertTrue(try estimator.measure(image: image, time: 0).isEmpty)
+        let imageEstimator = try MediaPipePoseEstimator(mode: .image)
+        XCTAssertTrue(try imageEstimator.measure(image: image, time: 0).isEmpty)
+        XCTAssertTrue(try imageEstimator.measure(image: image, time: 0).isEmpty)
     }
 }

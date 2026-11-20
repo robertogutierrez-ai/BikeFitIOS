@@ -4,6 +4,7 @@ import SwiftUI
 struct AnnotatedVideoView: View {
     let url: URL
     let side: String
+    let engine: AnalysisEngine
     let onClose: () -> Void
     @StateObject private var exporter = AnnotatedVideoExport()
     @State private var showingShare = false
@@ -13,7 +14,7 @@ struct AnnotatedVideoView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Vídeo anotado · experimental").font(.title2.bold())
                 Text("Se vuelve a analizar cada fotograma en el dispositivo. El proceso puede tardar y utiliza espacio temporal.")
-                Text("Se dibuja el lado \(side) cuando Vision detecta una postura completa. Si pierde el seguimiento, ese fotograma no lleva anotaciones. Los ángulos son orientativos, no son un diagnóstico.")
+                Text("Se dibuja el lado \(side) cuando \(engine.rawValue) detecta una postura completa. Si pierde el seguimiento, ese fotograma no lleva anotaciones. Los ángulos son orientativos, no son un diagnóstico.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Text("El archivo exportado conserva el audio original si lo hay. Compruébalo antes de compartirlo.")
@@ -32,7 +33,7 @@ struct AnnotatedVideoView: View {
                 } else if exporter.fileURL != nil {
                     Button("Reintentar eliminar el vídeo temporal") { exporter.removeFile() }
                 } else {
-                    Button("Crear vídeo anotado") { exporter.start(url: url, sideTitle: side) }
+                    Button("Crear vídeo anotado") { exporter.start(url: url, sideTitle: side, engine: engine) }
                         .buttonStyle(.borderedProminent)
                 }
 

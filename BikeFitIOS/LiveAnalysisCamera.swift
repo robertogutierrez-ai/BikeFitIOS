@@ -4,7 +4,7 @@ import CoreVideo
 import Foundation
 import Vision
 
-final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureFileOutputRecordingDelegate {
     enum Mode {
         case lateral, frontal
     }
@@ -12,6 +12,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     private let mode: Mode
     let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
+    private let movieOutput = AVCaptureMovieFileOutput()
     private let queue = DispatchQueue(label: "com.bikefit.live-camera", qos: .userInitiated)
     private let request = VNDetectHumanBodyPoseRequest()
     private var input: AVCaptureDeviceInput?
@@ -19,12 +20,17 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     private var runID: Int?
     private var lastSampleTime: Double?
     private var frameVersion = 0
+    private var accumulator: LiveSessionAccumulator?
 
     // These properties and the published state are accessed on the main thread.
     private var generation = 0
     private var measurementVersion = 0
     private var active = false
     private var orientation: AVCaptureVideoOrientation = .portrait
+    private var pendingRecording = false
+    private var discardRecording = false
+    private var analysisFinished = false
+    private var recordingFinished = true
     @Published private(set) var ready = false
     @Published private(set) var starting = false
     @Published private(set) var switching = false
@@ -32,6 +38,12 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     @Published private(set) var angles: [JointAngle: Double] = [:]
     @Published private(set) var side: String?
     @Published private(set) var frontalSeparations: [VideoAnalyzer.Side: Double] = [:]
+    @Published private(set) var canRecordVideo = false
+    @Published private(set) var collecting = false
+    @Published private(set) var finalizing = false
+    @Published private(set) var startingRecording = false
+    @Published private(set) var sessionResult: VideoAnalysisResult?
+    @Published private(set) var recordedURL: URL?
     @Published var errorMessage: String?
 
     init(mode: Mode = .lateral) {
@@ -81,11 +93,13 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
                 }
                 guard self.session.isRunning else { throw CameraError.startFailed }
                 let actualPosition = self.input?.device.position ?? .back
+                let canRecord = self.session.outputs.contains(self.movieOutput)
                 DispatchQueue.main.async {
                     guard self.active, self.generation == id else { return }
                     self.starting = false
                     self.ready = true
                     self.position = actualPosition
+                    self.canRecordVideo = canRecord
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -108,6 +122,9 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         }
         session.addInput(cameraInput)
         session.addOutput(output)
+        if session.canAddOutput(movieOutput) {
+            session.addOutput(movieOutput)
+        }
         if session.canSetSessionPreset(.medium) {
             session.sessionPreset = .medium
         }
@@ -119,6 +136,11 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
 
     func setOrientation(_ newOrientation: AVCaptureVideoOrientation) {
         guard orientation != newOrientation else { return }
+        if collecting || finalizing {
+            orientation = newOrientation
+            fail("La orientación ha cambiado durante la sesión. Inicia otra sesión con el teléfono fijo.")
+            return
+        }
         orientation = newOrientation
         angles = [:]
         side = nil
@@ -151,7 +173,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     }
 
     func switchCamera() {
-        guard ready, !switching else { return }
+        guard ready, !switching, !collecting, !finalizing else { return }
         switching = true
         angles = [:]
         side = nil
@@ -191,6 +213,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         } catch CameraInputSwitcher.SwitchError.restoreFailed {
             session.beginConfiguration()
             session.removeOutput(output)
+            if session.outputs.contains(movieOutput) { session.removeOutput(movieOutput) }
             session.commitConfiguration()
             input = nil
             configured = false
@@ -200,6 +223,8 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
 
     func shutdown() {
         generation += 1
+        discardRecording = true
+        if pendingRecording { movieOutput.stopRecording() }
         active = false
         ready = false
         starting = false
@@ -207,13 +232,138 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         angles = [:]
         side = nil
         frontalSeparations = [:]
+        collecting = false
+        finalizing = false
+        startingRecording = false
+        canRecordVideo = false
         queue.async {
             self.runID = nil
+            self.accumulator = nil
             self.lastSampleTime = nil
             if self.session.isRunning {
                 self.session.stopRunning()
             }
         }
+    }
+
+    func beginSession(recordVideo: Bool) {
+        guard mode == .lateral, ready, !switching, !collecting, !finalizing else { return }
+        guard !pendingRecording else {
+            errorMessage = "Espera a que termine la grabación anterior."
+            return
+        }
+        guard recordedURL == nil else {
+            errorMessage = "Elimina o revisa la grabación anterior antes de iniciar otra sesión."
+            return
+        }
+        if recordVideo {
+            guard canRecordVideo, let connection = movieOutput.connection(with: .video),
+                  connection.isVideoOrientationSupported else {
+                errorMessage = "No se puede grabar vídeo durante el análisis en este dispositivo."
+                return
+            }
+            connection.videoOrientation = orientation
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = false
+            }
+        }
+        sessionResult = nil
+        discardRecording = false
+        analysisFinished = false
+        recordingFinished = !recordVideo
+        collecting = true
+        queue.async { self.accumulator = LiveSessionAccumulator() }
+        if recordVideo {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("bikefit-live-\(UUID().uuidString).mov")
+            pendingRecording = true
+            startingRecording = true
+            movieOutput.startRecording(to: url, recordingDelegate: self)
+        }
+    }
+
+    func endSession() {
+        guard collecting, !startingRecording else { return }
+        collecting = false
+        finalizing = true
+        let id = generation
+        queue.async {
+            do {
+                guard let accumulator = self.accumulator else { throw CameraError.noSession }
+                let result = try accumulator.result()
+                self.accumulator = nil
+                DispatchQueue.main.async {
+                    guard self.active, self.generation == id else { return }
+                    self.sessionResult = result
+                    self.analysisFinished = true
+                    self.finishSessionIfReady()
+                }
+            } catch {
+                self.accumulator = nil
+                DispatchQueue.main.async {
+                    guard self.active, self.generation == id else { return }
+                    self.errorMessage = "No se pudo completar la sesión: \(error.localizedDescription)"
+                    self.analysisFinished = true
+                    self.finishSessionIfReady()
+                }
+            }
+        }
+        if pendingRecording { movieOutput.stopRecording() }
+    }
+
+    private func finishSessionIfReady() {
+        if analysisFinished && recordingFinished { finalizing = false }
+    }
+
+    func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL,
+                    from connections: [AVCaptureConnection]) {
+        DispatchQueue.main.async {
+            self.startingRecording = false
+            if self.discardRecording { self.movieOutput.stopRecording() }
+        }
+    }
+
+    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
+                    from connections: [AVCaptureConnection], error: Error?) {
+        DispatchQueue.main.async {
+            self.pendingRecording = false
+            self.startingRecording = false
+            self.recordingFinished = true
+            if self.discardRecording || error != nil {
+                do {
+                    if FileManager.default.fileExists(atPath: outputFileURL.path) {
+                        try FileManager.default.removeItem(at: outputFileURL)
+                    }
+                } catch {
+                    self.errorMessage = "No se pudo eliminar la grabación temporal: \(error.localizedDescription)"
+                }
+                if let error = error, !self.discardRecording {
+                    let message = "No se pudo guardar la grabación: \(error.localizedDescription)"
+                    self.errorMessage = [message, self.errorMessage].compactMap { $0 }.joined(separator: " ")
+                }
+            } else {
+                self.recordedURL = outputFileURL
+            }
+            self.finishSessionIfReady()
+        }
+    }
+
+    func removeRecording() -> Bool {
+        guard let url = recordedURL else { return true }
+        do {
+            try FileManager.default.removeItem(at: url)
+            recordedURL = nil
+            return true
+        } catch {
+            errorMessage = "No se pudo eliminar la grabación temporal: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    func takeRecording() -> URL? {
+        let url = recordedURL
+        recordedURL = nil
+        return url
     }
 
     func fail(_ message: String) {
@@ -256,7 +406,10 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
                 }
             }
             let selected = Self.preferredSide(in: measured)
-            let values = selected.flatMap { measured[$0] } ?? [:]
+            if self.accumulator != nil {
+                try self.accumulator?.add(time: time, measured: measured)
+            }
+            let values = selected.flatMap { self.accumulator?.latest(for: $0) ?? measured[$0] } ?? [:]
             let frontalValues = frontal
             DispatchQueue.main.async {
                 guard self.active, self.generation == id, self.measurementVersion == version else { return }
@@ -298,7 +451,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     }
 
     private enum CameraError: LocalizedError {
-        case cameraUnavailable, configurationFailed, startFailed, invalidFrame, orientationUnavailable
+        case cameraUnavailable, configurationFailed, startFailed, invalidFrame, orientationUnavailable, noSession
 
         var errorDescription: String? {
             switch self {
@@ -307,6 +460,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             case .startFailed: return "La sesión de cámara no se ha iniciado."
             case .invalidFrame: return "El fotograma recibido no es válido."
             case .orientationUnavailable: return "No se puede orientar la imagen de cámara."
+            case .noSession: return "La sesión no está disponible."
             }
         }
     }

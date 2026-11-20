@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, review, results, cleats, history
+        case home, capture, review, results, cleats, history, profiles
     }
 
     @State private var screen: Screen = .home
@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var isImporting = false
     @State private var importError: String?
     @State private var savedResult = false
+    @State private var activeProfile: ReferenceProfile?
 
     var body: some View {
         NavigationStack {
@@ -42,6 +43,8 @@ struct ContentView: View {
                     CleatAssistantView(onClose: { screen = .home })
                 case .history:
                     SessionHistoryView(onClose: { screen = .home })
+                case .profiles:
+                    ReferenceProfilesView(onClose: { screen = .home })
                 }
             }
             .navigationTitle("BikeFit")
@@ -117,6 +120,12 @@ struct ContentView: View {
                 Button("Ver historial de sesiones") { screen = .history }
                     .buttonStyle(.bordered)
                     .disabled(isImporting)
+                Divider()
+                Text("Perfiles y referencias").font(.title2.bold())
+                Text("Crea perfiles con tus propias referencias orientativas para consultar junto a los resultados.")
+                Button("Gestionar perfiles") { screen = .profiles }
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
             }
             .padding()
         }
@@ -184,10 +193,20 @@ struct ContentView: View {
                             Spacer()
                             Text(String(format: "%.1f° – %.1f°", range.minimum, range.maximum))
                         }
+                        if let reference = activeProfile?.ranges[angle] {
+                            Text("Referencia indicada: \(String(format: "%.1f° – %.1f°", reference.minimum, reference.maximum))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if let samples = result.timeline, !samples.isEmpty {
                     AngleTimelineView(samples: samples)
+                }
+                if let profile = activeProfile {
+                    Text("Referencias actuales del perfil «\(profile.name)», introducidas por el usuario. No son un diagnóstico ni objetivos validados.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
                     .font(.footnote)
@@ -217,6 +236,14 @@ struct ContentView: View {
                 }
             }
             .padding()
+        }
+        .onAppear {
+            do {
+                activeProfile = try ReferenceProfileStore().active()
+            } catch {
+                activeProfile = nil
+                analysisError = "No se pudo leer el perfil activo: \(error.localizedDescription)"
+            }
         }
         .alert("Resultados", isPresented: Binding(
             get: { analysisError != nil },

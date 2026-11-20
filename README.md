@@ -12,6 +12,8 @@ Tras el análisis puedes guardar explícitamente los resultados en el historial 
 
 Desde los resultados o una sesión guardada, **Compartir informe PDF** genera un informe con fecha, lado, fotogramas válidos y rangos disponibles. No incluye el vídeo. Se abre el menú de compartir del sistema y el usuario decide si lo guarda o lo envía; cualquier copia compartida queda bajo su control. La app elimina su archivo temporal al cerrar el menú, aunque iOS también puede borrar archivos temporales.
 
+En **Perfiles y referencias** puedes crear, editar, activar y eliminar perfiles locales con rangos que tú introduzcas; no se proporciona ningún rango clínico predeterminado. El perfil activo se muestra junto a los resultados actuales, sin puntuación ni recomendaciones. Las referencias no se guardan en la sesión ni en el PDF y no deben interpretarse como objetivos clínicos. Los presets de Android no se importan automáticamente porque las mediciones de ambos motores no son directamente equivalentes.
+
 ## Asistente de calas
 
 Fotografía cada suela con la cámara trasera, perpendicular a ella y manteniendo la orientación y el encuadre. En cada foto marca punta y talón de la zapatilla y después los extremos de la cala en el mismo orden. Puedes deshacer puntos o repetir la foto. La app muestra la rotación y los desplazamientos lateral y longitudinal como fracciones de la longitud del eje de la zapatilla; no son milímetros. El signo depende de la orientación y del orden de marcado. A diferencia de Android, los desplazamientos se normalizan por la longitud del eje de la zapatilla y no por el tamaño de la vista, por lo que sus valores no son directamente comparables.
@@ -68,4 +70,4 @@ El flujo `.github/workflows/ios.yml` genera el proyecto, compila para simulador 
 
 ## Privacidad
 
-El vídeo permanece en el almacenamiento temporal de la aplicación y el análisis se realiza localmente. Las fotos de calas solo se usan durante el asistente y no se guardan. El historial de calas y los resultados de sesiones guardados se almacenan localmente; el sistema puede incluirlos en las copias de seguridad del dispositivo. No se envían imágenes a servidores desde este prototipo. No subir vídeos ni fotos de prueba, certificados ni claves privadas al repositorio.
+El vídeo permanece en el almacenamiento temporal de la aplicación y el análisis se realiza localmente. Las fotos de calas solo se usan durante el asistente y no se guardan. El historial de calas, los perfiles y los resultados de sesiones guardados se almacenan localmente; el sistema puede incluirlos en las copias de seguridad del dispositivo. No se envían imágenes a servidores desde este prototipo. No subir vídeos ni fotos de prueba, certificados ni claves privadas al repositorio.

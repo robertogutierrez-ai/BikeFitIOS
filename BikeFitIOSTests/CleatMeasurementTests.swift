@@ -40,6 +40,6 @@ final class CleatMeasurementTests: XCTestCase {
         let heel = CGPoint(x: 0.5, y: 0.9)
         XCTAssertNil(CleatMeasurement.calculate(shoeFront: front, shoeHeel: front, cleatFront: front, cleatHeel: heel))
         XCTAssertNil(CleatMeasurement.calculate(shoeFront: front, shoeHeel: heel, cleatFront: front, cleatHeel: front))
-        XCTAssertNil(CleatMeasurement.calculate(shoeFront: CGPoint(x: .nan, y: 0), shoeHeel: heel, cleatFront: front, cleatHeel: heel))
+        XCTAssertNil(CleatMeasurement.calculate(shoeFront: CGPoint(x: CGFloat.nan, y: 0), shoeHeel: heel, cleatFront: front, cleatHeel: heel))
     }
 }

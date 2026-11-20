@@ -29,6 +29,7 @@ enum SessionPDF {
                  font: .systemFont(ofSize: 12))
             text("Lado \(result.side): \(result.validFrames) de \(result.sampledFrames) fotogramas válidos.",
                  font: .systemFont(ofSize: 12))
+            text("Motor: \((result.engine ?? .vision).rawValue)", font: .systemFont(ofSize: 12))
             text("Rangos medidos", font: .boldSystemFont(ofSize: 15))
             for angle in JointAngle.allCases {
                 if let range = result.ranges[angle] {
@@ -36,9 +37,9 @@ enum SessionPDF {
                          font: .systemFont(ofSize: 12))
                 }
             }
-            text("Los ángulos articulares se aproximan a 0° con la articulación estirada; las inclinaciones se miden respecto a la horizontal.",
+            text("Los ángulos articulares se aproximan a 0° con la articulación estirada; las inclinaciones se miden respecto a la horizontal. La inclinación del pie no distingue punta arriba o abajo.",
                  font: .systemFont(ofSize: 11))
-            text("Resultados orientativos, no validados clínicamente. No constituyen un diagnóstico ni recomendaciones de ajuste. Apple Vision puede dar resultados diferentes a los de Android.",
+            text("Resultados orientativos, no validados clínicamente. No constituyen un diagnóstico ni recomendaciones de ajuste. Los motores y dispositivos pueden dar resultados diferentes.",
                  font: .systemFont(ofSize: 11))
         }
     }

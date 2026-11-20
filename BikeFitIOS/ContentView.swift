@@ -152,7 +152,8 @@ struct ContentView: View {
             progress: analysisProgress,
             isCancelling: isCancellingAnalysis,
             error: analysisError,
-            onAnalyze: { startAnalysis(url) },
+            onAnalyze: { startAnalysis(url, engine: .vision) },
+            onAnalyzeMediaPipe: { startAnalysis(url, engine: .mediaPipe) },
             onCancelAnalysis: {
                 isCancellingAnalysis = true
                 analysisTask?.cancel()
@@ -172,7 +173,7 @@ struct ContentView: View {
         )
     }
 
-    private func startAnalysis(_ url: URL) {
+    private func startAnalysis(_ url: URL, engine: AnalysisEngine) {
         guard !isAnalyzing else { return }
         isAnalyzing = true
         isCancellingAnalysis = false
@@ -183,7 +184,7 @@ struct ContentView: View {
         analysisTask = Task {
             do {
                 let worker = Task.detached(priority: .userInitiated) {
-                    try VideoAnalyzer.analyze(url: url) { progress in
+                    try VideoAnalyzer.analyze(url: url, engine: engine) { progress in
                         DispatchQueue.main.async {
                             guard analysisID == id, isAnalyzing, !isCancellingAnalysis else { return }
                             analysisProgress = progress
@@ -220,6 +221,7 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Resultados básicos").font(.title2.bold())
+                Text("Motor: \((result.engine ?? .vision).rawValue)")
                 Text("Lado \(result.side): \(result.validFrames) de \(result.sampledFrames) fotogramas válidos.")
                 if result.sampledFrames > 0 {
                     Text(String(format: "Seguimiento válido: %.0f %%", 100.0 * Double(result.validFrames) / Double(result.sampledFrames)))
@@ -229,6 +231,16 @@ struct ContentView: View {
                     Text("Estimación experimental basada en la rodilla. La detección puede omitir ciclos y no mide la calidad del ajuste.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+                if result.engine == .mediaPipe, let samples = result.timeline {
+                    let footCount = samples.filter { $0.angles[.footInclination] != nil }.count
+                    Text("Pie detectado: \(footCount) de \(result.sampledFrames) fotogramas muestreados.")
+                        .font(.footnote)
+                    if footCount == 0 {
+                        Text("No hay mediciones del pie: comprueba que la punta sea visible.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 ForEach(JointAngle.allCases, id: \.self) { angle in
                     if let range = result.ranges[angle] {
@@ -248,15 +260,16 @@ struct ContentView: View {
                     AngleTimelineView(samples: samples)
                     AngleStatisticsView(samples: samples)
                 }
+                ExperimentalScoreView(result: result, profile: activeProfile)
                 if let profile = activeProfile {
                     Text("Referencias actuales del perfil «\(profile.name)», introducidas por el usuario. No son un diagnóstico ni objetivos validados.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
+                Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal; la del pie no distingue punta arriba o abajo. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Text("Esta primera versión utiliza Apple Vision, no MediaPipe. Los resultados pueden diferir de Android y no se han validado clínicamente.")
+                Text("Los resultados pueden diferir de Android y no se han validado clínicamente.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Text("Puedes guardar estos resultados en el historial local; el vídeo no se guarda.")
@@ -271,8 +284,14 @@ struct ContentView: View {
                 }
                 .disabled(savedResult)
                 SessionExportButton(result: result, date: Date())
-                Button("Crear vídeo anotado (experimental)") { screen = .annotatedVideo }
-                    .buttonStyle(.bordered)
+                if (result.engine ?? .vision) == .vision {
+                    Button("Crear vídeo anotado (experimental)") { screen = .annotatedVideo }
+                        .buttonStyle(.bordered)
+                } else {
+                    Text("El vídeo anotado solo está disponible para resultados de Apple Vision.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 Button("Volver al vídeo") { screen = .review }
                     .buttonStyle(.borderedProminent)
                 Button("Finalizar") {
@@ -425,17 +444,19 @@ private struct ReviewScreen: View {
     let isCancelling: Bool
     let error: String?
     let onAnalyze: () -> Void
+    let onAnalyzeMediaPipe: () -> Void
     let onCancelAnalysis: () -> Void
     let onRetake: () -> Void
     let onClose: () -> Void
 
-    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onAnalyzeMediaPipe: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
         _player = State(initialValue: AVPlayer(url: url))
         self.isAnalyzing = isAnalyzing
         self.progress = progress
         self.isCancelling = isCancelling
         self.error = error
         self.onAnalyze = onAnalyze
+        self.onAnalyzeMediaPipe = onAnalyzeMediaPipe
         self.onCancelAnalysis = onCancelAnalysis
         self.onRetake = onRetake
         self.onClose = onClose
@@ -465,6 +486,11 @@ private struct ReviewScreen: View {
                         Text(error).foregroundStyle(.red)
                     }
                     Button("Analizar vídeo", action: onAnalyze).buttonStyle(.borderedProminent)
+                    Button("Analizar con MediaPipe (experimental)", action: onAnalyzeMediaPipe)
+                        .buttonStyle(.bordered)
+                    Text("MediaPipe puede medir también tobillo y pie si detecta la punta. Los motores pueden producir resultados distintos.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     Button("Repetir grabación", action: onRetake)
                     Button("Cerrar", action: onClose)
                 }

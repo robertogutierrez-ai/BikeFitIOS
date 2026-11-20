@@ -8,6 +8,8 @@ enum JointAngle: String, CaseIterable, Codable {
     case shoulder = "Hombro"
     case backInclination = "Inclinación de espalda"
     case thighInclination = "Inclinación de muslo"
+    case ankle = "Tobillo"
+    case footInclination = "Inclinación del pie"
 }
 
 struct BodyPoints {
@@ -17,6 +19,7 @@ struct BodyPoints {
     let hip: CGPoint
     let knee: CGPoint
     let ankle: CGPoint
+    var foot: CGPoint? = nil
 }
 
 enum AngleCalculator {
@@ -50,7 +53,7 @@ enum AngleCalculator {
         let hip = pixel(points.hip)
         let knee = pixel(points.knee)
         let ankle = pixel(points.ankle)
-        let values: [(JointAngle, Double?)] = [
+        var values: [(JointAngle, Double?)] = [
             (.knee, angle(hip, knee, ankle)),
             (.hip, angle(shoulder, hip, knee)),
             (.elbow, angle(shoulder, elbow, wrist)),
@@ -58,6 +61,10 @@ enum AngleCalculator {
             (.backInclination, inclination(shoulder, hip)),
             (.thighInclination, inclination(hip, knee))
         ]
+        if let foot = points.foot.map(pixel) {
+            values.append((.ankle, angle(knee, ankle, foot)))
+            values.append((.footInclination, inclination(ankle, foot)))
+        }
         return Dictionary(uniqueKeysWithValues: values.compactMap { key, value in
             value.map { (key, $0) }
         })

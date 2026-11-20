@@ -12,6 +12,11 @@ struct AngleSample: Codable {
     let angles: [JointAngle: Double]
 }
 
+enum AnalysisEngine: String, Codable {
+    case vision = "Apple Vision"
+    case mediaPipe = "MediaPipe"
+}
+
 struct VideoAnalysisResult: Codable {
     let ranges: [JointAngle: AngleRange]
     let validFrames: Int
@@ -19,6 +24,7 @@ struct VideoAnalysisResult: Codable {
     let side: String
     var timeline: [AngleSample]? = nil
     var estimatedCycles: Int? = nil
+    var engine: AnalysisEngine? = nil
 }
 
 enum VideoAnalyzer {
@@ -42,14 +48,20 @@ enum VideoAnalyzer {
         let angles: [JointAngle: Double]
     }
 
-    static func analyze(url: URL, onProgress: @escaping (Double) -> Void) throws -> VideoAnalysisResult {
+    static func analyze(
+        url: URL, engine: AnalysisEngine = .vision, onProgress: @escaping (Double) -> Void
+    ) throws -> VideoAnalysisResult {
         let asset = AVURLAsset(url: url)
         let duration = asset.duration.seconds
         guard duration.isFinite, duration > 0 else { throw AnalysisError.invalidVideo }
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 1280, height: 1280)
-        let request = VNDetectHumanBodyPoseRequest()
+        let estimator: PoseEstimator
+        switch engine {
+        case .vision: estimator = .vision(VNDetectHumanBodyPoseRequest())
+        case .mediaPipe: estimator = .mediaPipe(try MediaPipePoseEstimator())
+        }
         var samples: [Sample] = []
         var sampled = 0
         var time = 0.0
@@ -59,14 +71,8 @@ enum VideoAnalyzer {
             try Task.checkCancellation()
             let image = try generator.copyCGImage(at: CMTime(seconds: time, preferredTimescale: 600), actualTime: nil)
             sampled += 1
-            let handler = VNImageRequestHandler(cgImage: image, options: [:])
-            try handler.perform([request])
-            if let observation = request.results?.first {
-                for (side, angles) in try measuredAngles(
-                    observation: observation, width: CGFloat(image.width), height: CGFloat(image.height)
-                ) {
-                    samples.append(Sample(side: side, time: time, angles: angles))
-                }
+            for (side, angles) in try estimator.measure(image: image, time: time) {
+                samples.append(Sample(side: side, time: time, angles: angles))
             }
             let now = ProcessInfo.processInfo.systemUptime
             if now - lastUpdate >= 0.2 || time + 0.2 >= duration {
@@ -104,8 +110,27 @@ enum VideoAnalyzer {
             sampledFrames: sampled,
             side: selected.title,
             timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) },
-            estimatedCycles: detector.cycles
+            estimatedCycles: detector.cycles,
+            engine: engine
         )
+    }
+
+    private enum PoseEstimator {
+        case vision(VNDetectHumanBodyPoseRequest)
+        case mediaPipe(MediaPipePoseEstimator)
+
+        func measure(image: CGImage, time: Double) throws -> [Side: [JointAngle: Double]] {
+            switch self {
+            case .vision(let request):
+                try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+                guard let observation = request.results?.first else { return [:] }
+                return try VideoAnalyzer.measuredAngles(
+                    observation: observation, width: CGFloat(image.width), height: CGFloat(image.height)
+                )
+            case .mediaPipe(let estimator):
+                return try estimator.measure(image: image, time: time)
+            }
+        }
     }
 
     static func progress(after sampleTime: Double, duration: Double) -> Double {

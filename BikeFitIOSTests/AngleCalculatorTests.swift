@@ -44,4 +44,20 @@ final class AngleCalculatorTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(AngleCalculator.inclination(second, first)), 45, accuracy: 0.001)
         XCTAssertNil(AngleCalculator.inclination(first, first))
     }
+
+    func testFootAnglesRequireToeAndUseImageAspectRatio() throws {
+        var points = BodyPoints(
+            shoulder: CGPoint(x: 0, y: 0), elbow: CGPoint(x: 0.1, y: 0),
+            wrist: CGPoint(x: 0.2, y: 0), hip: CGPoint(x: 0, y: 0.5),
+            knee: CGPoint(x: 0.5, y: 1), ankle: CGPoint(x: 0.5, y: 0.5)
+        )
+        XCTAssertNil(AngleCalculator.calculate(points, width: 200, height: 100)[.ankle])
+        points.foot = CGPoint(x: 0.75, y: 0)
+        let angles = AngleCalculator.calculate(points, width: 200, height: 100)
+        XCTAssertEqual(try XCTUnwrap(angles[.ankle]), 45, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(angles[.footInclination]), 45, accuracy: 0.001)
+        points.foot = points.ankle
+        XCTAssertNil(AngleCalculator.calculate(points, width: 200, height: 100)[.ankle])
+        XCTAssertNil(AngleCalculator.calculate(points, width: 200, height: 100)[.footInclination])
+    }
 }

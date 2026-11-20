@@ -30,6 +30,7 @@ struct SessionHistoryView: View {
                         Text(session.savedAt.formatted(date: .abbreviated, time: .shortened))
                             .font(.headline)
                         Text("Lado \(session.result.side): \(session.result.validFrames) de \(session.result.sampledFrames) fotogramas válidos.")
+                        Text("Motor: \((session.result.engine ?? .vision).rawValue)")
                         if let cycles = session.result.estimatedCycles {
                             Text("Ciclos aproximados: \(cycles) · estimación experimental")
                         }
@@ -93,6 +94,10 @@ struct SessionHistoryView: View {
             Text("Segunda: \(comparison.savedAt.formatted(date: .abbreviated, time: .shortened)) · lado \(comparison.result.side)")
             if baseline.result.side != comparison.result.side {
                 Text("Se han analizado lados diferentes; las diferencias pueden reflejar esa variación.")
+                    .foregroundStyle(.secondary)
+            }
+            if (baseline.result.engine ?? .vision) != (comparison.result.engine ?? .vision) {
+                Text("Se han utilizado motores de pose diferentes; sus mediciones pueden no ser comparables.")
                     .foregroundStyle(.secondary)
             }
             ForEach(JointAngle.allCases, id: \.self) { angle in

@@ -151,20 +151,25 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureFileOutputRecord
 
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    var onOrientationChange: ((AVCaptureVideoOrientation) -> Void)? = nil
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        view.onOrientationChange = onOrientationChange
         return view
     }
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
+        uiView.onOrientationChange = onOrientationChange
         uiView.updateOrientation()
     }
 }
 
 final class PreviewView: UIView {
+    var onOrientationChange: ((AVCaptureVideoOrientation) -> Void)?
+    private var lastNotifiedOrientation: AVCaptureVideoOrientation?
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 
@@ -174,8 +179,13 @@ final class PreviewView: UIView {
     }
 
     func updateOrientation() {
+        let orientation = currentVideoOrientation(window?.windowScene?.interfaceOrientation)
         if let connection = previewLayer.connection, connection.isVideoOrientationSupported {
-            connection.videoOrientation = currentVideoOrientation(window?.windowScene?.interfaceOrientation)
+            connection.videoOrientation = orientation
+        }
+        if lastNotifiedOrientation != orientation, let onOrientationChange = onOrientationChange {
+            lastNotifiedOrientation = orientation
+            DispatchQueue.main.async { onOrientationChange(orientation) }
         }
     }
 }

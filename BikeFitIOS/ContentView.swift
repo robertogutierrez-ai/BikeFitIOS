@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, review, results, cleats, history, profiles
+        case home, capture, live, review, results, cleats, history, profiles
     }
 
     @State private var screen: Screen = .home
@@ -34,6 +34,8 @@ struct ContentView: View {
                         videoURL = url
                         screen = .review
                     })
+                case .live:
+                    LiveAnalysisView(onClose: { screen = .home })
                 case .review:
                     if let url = videoURL {
                         review(url: url)
@@ -97,6 +99,11 @@ struct ContentView: View {
                     screen = .capture
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isImporting)
+                Button("Análisis en directo (experimental)") {
+                    screen = .live
+                }
+                .buttonStyle(.bordered)
                 .disabled(isImporting)
                 PhotosPicker(selection: $selectedVideo, matching: .videos) {
                     Text("Analizar vídeo de la fototeca")

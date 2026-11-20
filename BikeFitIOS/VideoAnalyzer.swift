@@ -22,7 +22,7 @@ struct VideoAnalysisResult: Codable {
 }
 
 enum VideoAnalyzer {
-    private enum Side: CaseIterable {
+    enum Side: CaseIterable {
         case left, right
 
         var title: String { self == .left ? "izquierdo" : "derecho" }
@@ -62,13 +62,10 @@ enum VideoAnalyzer {
             let handler = VNImageRequestHandler(cgImage: image, options: [:])
             try handler.perform([request])
             if let observation = request.results?.first {
-                for side in Side.allCases {
-                    if let points = try points(for: side, observation: observation) {
-                        let angles = AngleCalculator.calculate(points, width: CGFloat(image.width), height: CGFloat(image.height))
-                        if AngleCalculator.requiredAngles.allSatisfy({ angles[$0] != nil }) {
-                            samples.append(Sample(side: side, time: time, angles: angles))
-                        }
-                    }
+                for (side, angles) in try measuredAngles(
+                    observation: observation, width: CGFloat(image.width), height: CGFloat(image.height)
+                ) {
+                    samples.append(Sample(side: side, time: time, angles: angles))
                 }
             }
             let now = ProcessInfo.processInfo.systemUptime
@@ -113,6 +110,21 @@ enum VideoAnalyzer {
 
     static func progress(after sampleTime: Double, duration: Double) -> Double {
         min((sampleTime + 0.2) / duration, 1)
+    }
+
+    static func measuredAngles(
+        observation: VNHumanBodyPoseObservation, width: CGFloat, height: CGFloat
+    ) throws -> [Side: [JointAngle: Double]] {
+        var result: [Side: [JointAngle: Double]] = [:]
+        for side in Side.allCases {
+            if let points = try points(for: side, observation: observation) {
+                let angles = AngleCalculator.calculate(points, width: width, height: height)
+                if AngleCalculator.requiredAngles.allSatisfy({ angles[$0] != nil }) {
+                    result[side] = angles
+                }
+            }
+        }
+        return result
     }
 
     private static func points(for side: Side, observation: VNHumanBodyPoseObservation) throws -> BodyPoints? {

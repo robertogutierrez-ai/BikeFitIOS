@@ -56,7 +56,7 @@ struct SessionExportButton: View {
     }
 }
 
-private struct ShareDocument: UIViewControllerRepresentable {
+struct ShareDocument: UIViewControllerRepresentable {
     let url: URL
 
     func makeUIViewController(context: Context) -> UIActivityViewController {

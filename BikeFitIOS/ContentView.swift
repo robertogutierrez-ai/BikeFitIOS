@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, live, review, results, cleats, history, profiles
+        case home, capture, live, review, results, annotatedVideo, cleats, history, profiles
     }
 
     @State private var screen: Screen = .home
@@ -43,6 +43,10 @@ struct ContentView: View {
                 case .results:
                     if let result = result {
                         results(result)
+                    }
+                case .annotatedVideo:
+                    if let url = videoURL, let result = result {
+                        AnnotatedVideoView(url: url, side: result.side, onClose: { screen = .results })
                     }
                 case .cleats:
                     CleatAssistantView(onClose: { screen = .home })
@@ -242,6 +246,7 @@ struct ContentView: View {
                 }
                 if let samples = result.timeline, !samples.isEmpty {
                     AngleTimelineView(samples: samples)
+                    AngleStatisticsView(samples: samples)
                 }
                 if let profile = activeProfile {
                     Text("Referencias actuales del perfil «\(profile.name)», introducidas por el usuario. No son un diagnóstico ni objetivos validados.")
@@ -266,6 +271,8 @@ struct ContentView: View {
                 }
                 .disabled(savedResult)
                 SessionExportButton(result: result, date: Date())
+                Button("Crear vídeo anotado (experimental)") { screen = .annotatedVideo }
+                    .buttonStyle(.bordered)
                 Button("Volver al vídeo") { screen = .review }
                     .buttonStyle(.borderedProminent)
                 Button("Finalizar") {

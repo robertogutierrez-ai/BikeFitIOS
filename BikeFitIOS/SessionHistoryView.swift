@@ -42,6 +42,7 @@ struct SessionHistoryView: View {
                             DisclosureGroup("Ver gráfica") {
                                 AngleTimelineView(samples: samples)
                             }
+                            AngleStatisticsView(samples: samples)
                         }
                         if sessions.count >= 2 {
                             Button(selectionTitle(for: session)) {

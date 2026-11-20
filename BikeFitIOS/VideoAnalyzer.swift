@@ -127,7 +127,7 @@ enum VideoAnalyzer {
         return result
     }
 
-    private static func points(for side: Side, observation: VNHumanBodyPoseObservation) throws -> BodyPoints? {
+    static func points(for side: Side, observation: VNHumanBodyPoseObservation) throws -> BodyPoints? {
         let points = try side.joints.map { try observation.recognizedPoint($0) }
         guard points.allSatisfy({ $0.confidence >= 0.55 }) else { return nil }
         return BodyPoints(

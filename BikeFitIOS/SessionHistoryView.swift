@@ -7,6 +7,7 @@ struct SessionHistoryView: View {
     @State private var pendingDeletion: SavedSession?
     @State private var loaded = false
     @State private var selectedIDs: [UUID] = []
+    @State private var comparisonMode: SessionComparison.Mode = .general
 
     var body: some View {
         ScrollView {
@@ -18,7 +19,13 @@ struct SessionHistoryView: View {
                     Text("No hay sesiones guardadas.")
                 }
                 if sessions.count >= 2 {
-                    Text("Selecciona dos sesiones para comparar: primero la base y después la segunda.")
+                    Picker("Tipo de comparación", selection: $comparisonMode) {
+                        ForEach(SessionComparison.Mode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    comparisonInstructions
                     if selectedIDs.count == 2,
                        let baseline = sessions.first(where: { $0.id == selectedIDs[0] }),
                        let comparison = sessions.first(where: { $0.id == selectedIDs[1] }) {
@@ -87,27 +94,58 @@ struct SessionHistoryView: View {
         }
     }
 
+    private var comparisonInstructions: some View {
+        Group {
+            switch comparisonMode {
+            case .general:
+                Text("Selecciona dos sesiones para comparar: primero la base y después la segunda.")
+            case .beforeAfter:
+                Text("Selecciona primero una sesión antes y después otra posterior, del mismo lado y con el mismo motor. La fecha es la de guardado, no necesariamente la de grabación.")
+            case .bilateral:
+                Text("Selecciona dos sesiones, una por cada lado, con el mismo motor. Graba cada lado por separado en condiciones similares.")
+            }
+        }
+        .font(.footnote)
+    }
+
     private func comparisonView(baseline: SavedSession, comparison: SavedSession) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Comparación: segunda menos base").font(.headline)
+            Text("\(comparisonMode.rawValue): segunda menos base").font(.headline)
             Text("Base: \(baseline.savedAt.formatted(date: .abbreviated, time: .shortened)) · lado \(baseline.result.side)")
             Text("Segunda: \(comparison.savedAt.formatted(date: .abbreviated, time: .shortened)) · lado \(comparison.result.side)")
-            if baseline.result.side != comparison.result.side {
-                Text("Se han analizado lados diferentes; las diferencias pueden reflejar esa variación.")
-                    .foregroundStyle(.secondary)
-            }
-            if (baseline.result.engine ?? .vision) != (comparison.result.engine ?? .vision) {
-                Text("Se han utilizado motores de pose diferentes; sus mediciones pueden no ser comparables.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(JointAngle.allCases, id: \.self) { angle in
-                if let difference = SessionComparison.difference(for: angle, baseline: baseline.result, comparison: comparison.result) {
-                    Text("\(angle.rawValue): \(String(format: "mín. %+.1f° · máx. %+.1f°", difference.minimum, difference.maximum))")
+            if let reason = SessionComparison.unavailableReason(
+                mode: comparisonMode, baseline: baseline.result, comparison: comparison.result
+            ) {
+                Text(reason).foregroundStyle(.secondary)
+            } else {
+                if comparisonMode == .general && baseline.result.side != comparison.result.side {
+                    Text("Se han analizado lados diferentes; las diferencias pueden reflejar esa variación.")
+                        .foregroundStyle(.secondary)
                 }
+                if (baseline.result.engine ?? .vision) != (comparison.result.engine ?? .vision) {
+                    Text("Se han utilizado motores de pose diferentes; sus mediciones pueden no ser comparables.")
+                        .foregroundStyle(.secondary)
+                }
+                Text("Seguimiento: \(baseline.result.validFrames)/\(baseline.result.sampledFrames) y \(comparison.result.validFrames)/\(comparison.result.sampledFrames) fotogramas.")
+                    .font(.footnote)
+                if !JointAngle.allCases.contains(where: {
+                    SessionComparison.difference(for: $0, baseline: baseline.result, comparison: comparison.result) != nil
+                }) {
+                    Text("No hay métricas comunes para comparar.").font(.footnote)
+                }
+                ForEach(JointAngle.allCases, id: \.self) { angle in
+                    if let difference = SessionComparison.difference(for: angle, baseline: baseline.result, comparison: comparison.result) {
+                        Text("\(angle.rawValue): \(String(format: "mín. %+.1f° · máx. %+.1f°", difference.minimum, difference.maximum))")
+                        if let mean = SessionComparison.meanDifference(for: angle, baseline: baseline.result, comparison: comparison.result) {
+                            Text("Diferencia entre medias: \(String(format: "%+.1f°", mean.value)) (\(mean.baselineCount) y \(mean.comparisonCount) muestras)")
+                                .font(.footnote)
+                        }
+                    }
+                }
+                Text("Son diferencias descriptivas, no detectan fatiga ni asimetrías clínicas. Dependen del encuadre, del pedaleo y de las muestras válidas; no indican una mejora ni un ajuste recomendado.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            Text("Las diferencias son orientativas y dependen del encuadre y de las muestras válidas; no indican por sí solas una mejora ni un ajuste recomendado.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
     }
 

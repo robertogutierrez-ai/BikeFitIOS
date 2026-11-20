@@ -6,6 +6,7 @@ struct SessionHistoryView: View {
     @State private var error: String?
     @State private var pendingDeletion: SavedSession?
     @State private var loaded = false
+    @State private var selectedIDs: [UUID] = []
 
     var body: some View {
         ScrollView {
@@ -15,6 +16,14 @@ struct SessionHistoryView: View {
                     .foregroundStyle(.secondary)
                 if loaded && sessions.isEmpty {
                     Text("No hay sesiones guardadas.")
+                }
+                if sessions.count >= 2 {
+                    Text("Selecciona dos sesiones para comparar: primero la base y después la segunda.")
+                    if selectedIDs.count == 2,
+                       let baseline = sessions.first(where: { $0.id == selectedIDs[0] }),
+                       let comparison = sessions.first(where: { $0.id == selectedIDs[1] }) {
+                        comparisonView(baseline: baseline, comparison: comparison)
+                    }
                 }
                 ForEach(sessions) { session in
                     VStack(alignment: .leading, spacing: 6) {
@@ -26,13 +35,19 @@ struct SessionHistoryView: View {
                                 Text("\(angle.rawValue): \(String(format: "%.1f° – %.1f°", range.minimum, range.maximum))")
                             }
                         }
+                        if sessions.count >= 2 {
+                            Button(selectionTitle(for: session)) {
+                                toggleSelection(session)
+                            }
+                            .disabled(selectedIDs.count == 2 && !selectedIDs.contains(session.id))
+                        }
                         Button("Eliminar sesión", role: .destructive) {
                             pendingDeletion = session
                         }
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                 }
                 Button("Volver", action: onClose)
             }
@@ -61,6 +76,39 @@ struct SessionHistoryView: View {
         }
     }
 
+    private func comparisonView(baseline: SavedSession, comparison: SavedSession) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Comparación: segunda menos base").font(.headline)
+            Text("Base: \(baseline.savedAt.formatted(date: .abbreviated, time: .shortened)) · lado \(baseline.result.side)")
+            Text("Segunda: \(comparison.savedAt.formatted(date: .abbreviated, time: .shortened)) · lado \(comparison.result.side)")
+            if baseline.result.side != comparison.result.side {
+                Text("Se han analizado lados diferentes; las diferencias pueden reflejar esa variación.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(JointAngle.allCases, id: \.self) { angle in
+                if let difference = SessionComparison.difference(for: angle, baseline: baseline.result, comparison: comparison.result) {
+                    Text("\(angle.rawValue): \(String(format: "mín. %+.1f° · máx. %+.1f°", difference.minimum, difference.maximum))")
+                }
+            }
+            Text("Las diferencias son orientativas y dependen del encuadre y de las muestras válidas; no indican por sí solas una mejora ni un ajuste recomendado.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func selectionTitle(for session: SavedSession) -> String {
+        guard let index = selectedIDs.firstIndex(of: session.id) else { return "Seleccionar para comparar" }
+        return index == 0 ? "Quitar selección: base" : "Quitar selección: segunda"
+    }
+
+    private func toggleSelection(_ session: SavedSession) {
+        if let index = selectedIDs.firstIndex(of: session.id) {
+            selectedIDs.remove(at: index)
+        } else if selectedIDs.count < 2 {
+            selectedIDs.append(session.id)
+        }
+    }
+
     private func load() {
         do {
             sessions = try SessionHistoryStore.standard().load()
@@ -75,6 +123,7 @@ struct SessionHistoryView: View {
         do {
             try SessionHistoryStore.standard().delete(session)
             sessions.removeAll { $0.id == session.id }
+            selectedIDs.removeAll { $0 == session.id }
         } catch {
             self.error = "No se pudo eliminar la sesión: \(error.localizedDescription)"
         }

@@ -6,6 +6,8 @@ enum JointAngle: String, CaseIterable, Codable {
     case hip = "Cadera"
     case elbow = "Codo"
     case shoulder = "Hombro"
+    case backInclination = "Inclinación de espalda"
+    case thighInclination = "Inclinación de muslo"
 }
 
 struct BodyPoints {
@@ -18,6 +20,8 @@ struct BodyPoints {
 }
 
 enum AngleCalculator {
+    static let requiredAngles: [JointAngle] = [.knee, .hip, .elbow, .shoulder]
+
     static func angle(_ first: CGPoint, _ middle: CGPoint, _ last: CGPoint) -> Double? {
         let ax = middle.x - first.x
         let ay = middle.y - first.y
@@ -27,6 +31,13 @@ enum AngleCalculator {
         guard magnitude > 0 else { return nil }
         let cosine = max(-1, min(1, (ax * bx + ay * by) / magnitude))
         return Double(acos(cosine)) * 180 / Double.pi
+    }
+
+    static func inclination(_ first: CGPoint, _ second: CGPoint) -> Double? {
+        let dx = second.x - first.x
+        let dy = second.y - first.y
+        guard dx.isFinite, dy.isFinite, dx != 0 || dy != 0 else { return nil }
+        return Double(atan2(abs(dy), abs(dx))) * 180 / Double.pi
     }
 
     static func calculate(_ points: BodyPoints, width: CGFloat, height: CGFloat) -> [JointAngle: Double] {
@@ -43,7 +54,9 @@ enum AngleCalculator {
             (.knee, angle(hip, knee, ankle)),
             (.hip, angle(shoulder, hip, knee)),
             (.elbow, angle(shoulder, elbow, wrist)),
-            (.shoulder, angle(hip, shoulder, elbow))
+            (.shoulder, angle(hip, shoulder, elbow)),
+            (.backInclination, inclination(shoulder, hip)),
+            (.thighInclination, inclination(hip, knee))
         ]
         return Dictionary(uniqueKeysWithValues: values.compactMap { key, value in
             value.map { (key, $0) }

@@ -186,7 +186,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                Text("Los ángulos siguen la convención de la app Android: una articulación completamente estirada se aproxima a 0°. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
+                Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Text("Esta primera versión utiliza Apple Vision, no MediaPipe. Los resultados pueden diferir de Android y no se han validado clínicamente.")

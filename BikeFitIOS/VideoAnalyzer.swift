@@ -55,7 +55,7 @@ enum VideoAnalyzer {
                 for side in Side.allCases {
                     if let points = try points(for: side, observation: observation) {
                         let angles = AngleCalculator.calculate(points, width: CGFloat(image.width), height: CGFloat(image.height))
-                        if angles.count == JointAngle.allCases.count {
+                        if AngleCalculator.requiredAngles.allSatisfy({ angles[$0] != nil }) {
                             samples.append(Sample(side: side, angles: angles))
                         }
                     }

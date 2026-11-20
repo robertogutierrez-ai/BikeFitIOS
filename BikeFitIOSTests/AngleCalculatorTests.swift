@@ -33,5 +33,15 @@ final class AngleCalculatorTests: XCTestCase {
         )
         let result = AngleCalculator.calculate(points, width: 1920, height: 1080)
         XCTAssertEqual(try XCTUnwrap(result[.knee]), 90, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(result[.backInclination]), 90, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(result[.thighInclination]), 0, accuracy: 0.001)
+    }
+
+    func testInclinationIsIndependentOfDirectionAndRejectsDegenerateLine() throws {
+        let first = CGPoint(x: 0, y: 0)
+        let second = CGPoint(x: 1, y: 1)
+        XCTAssertEqual(try XCTUnwrap(AngleCalculator.inclination(first, second)), 45, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(AngleCalculator.inclination(second, first)), 45, accuracy: 0.001)
+        XCTAssertNil(AngleCalculator.inclination(first, first))
     }
 }

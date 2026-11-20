@@ -11,6 +11,13 @@ struct CleatAssistantView: View {
     @State private var right: CleatMeasurement?
     @State private var showingCamera = false
     @State private var error: String?
+    @State private var history: [CleatSetup] = []
+    @State private var note = ""
+    @State private var symptom = "Ninguna"
+    @State private var comfort = 3
+    @State private var savedCurrentSetupID: UUID?
+
+    private let historyStore = CleatHistoryStore()
 
     private let instructions = [
         "Marca la punta de la zapatilla.",
@@ -53,10 +60,17 @@ struct CleatAssistantView: View {
                     Button("Fotografiar suela") { openCamera() }
                         .buttonStyle(.borderedProminent)
                 }
+                if image == nil, !history.isEmpty {
+                    Text("Historial local · últimas \(history.count) mediciones").font(.headline)
+                    ForEach(history) { setup in
+                        historyRow(setup)
+                    }
+                }
                 Button("Salir", action: onClose)
             }
             .padding()
         }
+        .onAppear(perform: loadHistory)
         .sheet(isPresented: $showingCamera) {
             CleatCamera { captured in
                 image = captured
@@ -132,7 +146,27 @@ struct CleatAssistantView: View {
             resultRow("Derecha", measurement: right)
             Text("Los desplazamientos son fracciones de la longitud del eje marcado de la zapatilla, no milímetros. El signo depende de la orientación de la foto y del orden de los puntos; no indica por sí solo interior o exterior.")
             Text("Los resultados son orientativos, dependen de la perspectiva y del marcado y no se han validado con iPhone ni comparado con Android. La simetría no implica una posición correcta; no constituyen un diagnóstico ni una recomendación de ajuste.")
-            Text("La app no guarda estas fotos ni resultados en un historial y no los envía a servidores.")
+            if let previous = previousSetup {
+                comparison(left: left, right: right, previous: previous)
+            }
+            Text("Guarda la medición solo si quieres conservarla en el historial local. Las fotos no se guardan ni se envían a servidores.")
+            Group {
+                Stepper("Comodidad: \(comfort)/5", value: $comfort, in: 1...5)
+                Picker("Molestia", selection: $symptom) {
+                    ForEach(["Ninguna", "Dolor", "Entumecimiento", "Presión", "Otra"], id: \.self) { value in
+                        Text(value).tag(value)
+                    }
+                }
+                TextField("Nota opcional", text: $note, axis: .vertical)
+                    .lineLimit(2...4)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .disabled(savedCurrentSetupID != nil)
+            Button(savedCurrentSetupID != nil ? "Medición guardada" : "Guardar en el historial") {
+                saveCurrentMeasurement(left: left, right: right)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(savedCurrentSetupID != nil)
             Button("Empezar de nuevo") {
                 leftReset()
             }
@@ -149,12 +183,98 @@ struct CleatAssistantView: View {
         }
     }
 
+    private var previousSetup: CleatSetup? {
+        guard let savedCurrentSetupID,
+              history.first?.id == savedCurrentSetupID else {
+            return history.first
+        }
+        return history.dropFirst().first
+    }
+
+    private func comparison(left: CleatMeasurement, right: CleatMeasurement, previous: CleatSetup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Diferencia frente a la medición anterior").font(.headline)
+            Text(String(format: "Izquierda: rotación %+.1f° · lateral %+.3f",
+                        CleatMeasurement.normalizedRotation(left.rotationDegrees - previous.left.rotationDegrees),
+                        left.lateralRelativeToShoe - previous.left.lateralRelativeToShoe))
+            Text(String(format: "Derecha: rotación %+.1f° · lateral %+.3f",
+                        CleatMeasurement.normalizedRotation(right.rotationDegrees - previous.right.rotationDegrees),
+                        right.lateralRelativeToShoe - previous.right.lateralRelativeToShoe))
+            Text("Compara solo fotos tomadas con la misma orientación y encuadre. La diferencia es orientativa y no recomienda ajustes.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func historyRow(_ setup: CleatSetup) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(setup.savedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.headline)
+                Spacer()
+                Button("Eliminar", role: .destructive) {
+                    deleteSetup(setup)
+                }
+                .font(.caption)
+            }
+            Text("Comodidad: \(setup.comfort)/5 · \(setup.symptom)")
+            if !setup.note.isEmpty {
+                Text(setup.note)
+            }
+            Text(String(format: "I: %.1f° / %.3f · D: %.1f° / %.3f",
+                        setup.left.rotationDegrees, setup.left.lateralRelativeToShoe,
+                        setup.right.rotationDegrees, setup.right.lateralRelativeToShoe))
+                .font(.caption.monospacedDigit())
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func loadHistory() {
+        do {
+            history = try historyStore.load()
+        } catch {
+            self.error = "No se pudo leer el historial local: \(error.localizedDescription)"
+        }
+    }
+
+    private func saveCurrentMeasurement(left: CleatMeasurement, right: CleatMeasurement) {
+        do {
+            history = try historyStore.save(
+                left: left,
+                right: right,
+                note: note,
+                comfort: comfort,
+                symptom: symptom
+            )
+            savedCurrentSetupID = history.first?.id
+        } catch {
+            self.error = "No se pudo guardar la medición: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteSetup(_ setup: CleatSetup) {
+        do {
+            history = try historyStore.delete(id: setup.id)
+            if setup.id == savedCurrentSetupID {
+                savedCurrentSetupID = nil
+            }
+        } catch {
+            self.error = "No se pudo eliminar la medición: \(error.localizedDescription)"
+        }
+    }
+
     private func leftReset() {
         side = 0
         left = nil
         right = nil
         image = nil
         points = []
+        note = ""
+        symptom = "Ninguna"
+        comfort = 3
+        savedCurrentSetupID = nil
     }
 }
 

@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-struct CleatMeasurement {
+struct CleatMeasurement: Equatable {
     let rotationDegrees: Double
     let lateralRelativeToShoe: Double
     let longitudinalRelativeToShoe: Double
@@ -17,17 +17,21 @@ struct CleatMeasurement {
         let cleatLength = hypot(cleatX, cleatY)
         guard shoeLength.isFinite, cleatLength.isFinite, shoeLength >= 0.02, cleatLength >= 0.02 else { return nil }
 
-        var rotation = (atan2(cleatY, cleatX) - atan2(shoeY, shoeX)) * 180 / .pi
-        rotation.formTruncatingRemainder(dividingBy: 180)
-        if rotation > 90 { rotation -= 180 }
-        if rotation < -90 { rotation += 180 }
+        let rotation = normalizedRotation(Double((atan2(cleatY, cleatX) - atan2(shoeY, shoeX)) * 180 / .pi))
 
         let dx = (cleatFront.x + cleatHeel.x - shoeFront.x - shoeHeel.x) / 2
         let dy = (cleatFront.y + cleatHeel.y - shoeFront.y - shoeHeel.y) / 2
         return CleatMeasurement(
-            rotationDegrees: Double(rotation),
+            rotationDegrees: rotation,
             lateralRelativeToShoe: Double((-dx * shoeY + dy * shoeX) / (shoeLength * shoeLength)),
             longitudinalRelativeToShoe: Double((dx * shoeX + dy * shoeY) / (shoeLength * shoeLength))
         )
+    }
+
+    static func normalizedRotation(_ value: Double) -> Double {
+        var result = value.truncatingRemainder(dividingBy: 180)
+        if result > 90 { result -= 180 }
+        if result < -90 { result += 180 }
+        return result
     }
 }

@@ -42,4 +42,9 @@ final class CleatMeasurementTests: XCTestCase {
         XCTAssertNil(CleatMeasurement.calculate(shoeFront: front, shoeHeel: heel, cleatFront: front, cleatHeel: front))
         XCTAssertNil(CleatMeasurement.calculate(shoeFront: CGPoint(x: CGFloat.nan, y: 0), shoeHeel: heel, cleatFront: front, cleatHeel: heel))
     }
+
+    func testRotationDifferenceCrossesAxisBoundary() {
+        XCTAssertEqual(CleatMeasurement.normalizedRotation(-89 - 89), 2, accuracy: 0.001)
+        XCTAssertEqual(CleatMeasurement.normalizedRotation(89 - (-89)), -2, accuracy: 0.001)
+    }
 }

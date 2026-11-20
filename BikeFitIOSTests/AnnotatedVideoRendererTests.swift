@@ -97,7 +97,7 @@ final class AnnotatedVideoRendererTests: XCTestCase {
         }
         exporter.outputURL = outputURL
         exporter.outputFileType = .mp4
-        exporter.videoComposition = AnnotatedVideoRenderer.composition(for: asset, side: .left)
+        exporter.videoComposition = AnnotatedVideoRenderer.composition(for: asset, side: .left) { _ in nil }
         let exported = expectation(description: "Vídeo anotado exportado")
         exporter.exportAsynchronously { exported.fulfill() }
         wait(for: [exported], timeout: 90)
@@ -113,5 +113,21 @@ final class AnnotatedVideoRendererTests: XCTestCase {
         let frame = try generator.copyCGImage(at: .zero, actualTime: nil)
         XCTAssertLessThan(frame.width, frame.height)
         XCTAssertEqual(Double(frame.width) / Double(frame.height), 90.0 / 160.0, accuracy: 0.03)
+
+        let failingExporter = try XCTUnwrap(AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1280x720))
+        failingExporter.outputURL = directory.appendingPathComponent("failure.mp4")
+        failingExporter.outputFileType = .mp4
+        failingExporter.videoComposition = AnnotatedVideoRenderer.composition(for: asset, side: .left) { _ in
+            throw PoseError.simulated
+        }
+        let failed = expectation(description: "Error de detección propagado")
+        failingExporter.exportAsynchronously { failed.fulfill() }
+        wait(for: [failed], timeout: 90)
+        XCTAssertEqual(failingExporter.status, .failed)
+        XCTAssertNotNil(failingExporter.error)
+    }
+
+    private enum PoseError: Error {
+        case simulated
     }
 }

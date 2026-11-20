@@ -83,6 +83,8 @@ Con una cuenta gratuita, el perfil de instalación caduca a los siete días y ha
 
 El flujo `.github/workflows/ios.yml` genera el proyecto, compila para simulador y ejecuta las pruebas en un simulador de iPhone disponible. Se ejecuta al subir cambios y también puede iniciarse manualmente desde GitHub Actions. Este flujo **no firma ni crea un IPA instalable**, no publica en TestFlight y no necesita credenciales de Apple.
 
+La prueba de exportación del vídeo anotado usa un detector simulado para comprobar la orientación y la propagación de errores, ya que el simulador de CI puede carecer del modelo de pose de Apple Vision. No valida la detección real ni sustituye las pruebas en un iPhone.
+
 ## Privacidad
 
 El vídeo permanece en el almacenamiento temporal de la aplicación y el análisis se realiza localmente. Las fotos de calas solo se usan durante el asistente y no se guardan. El historial de calas, los perfiles y los resultados de sesiones guardados se almacenan localmente; el sistema puede incluirlos en las copias de seguridad del dispositivo. No se envían imágenes a servidores desde este prototipo. No subir vídeos ni fotos de prueba, certificados ni claves privadas al repositorio.

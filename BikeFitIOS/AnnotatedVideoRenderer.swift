@@ -6,6 +6,13 @@ import Vision
 
 enum AnnotatedVideoRenderer {
     static func composition(for asset: AVAsset, side: VideoAnalyzer.Side) -> AVVideoComposition {
+        composition(for: asset, side: side, detectPose: detectPose(in:))
+    }
+
+    static func composition(
+        for asset: AVAsset, side: VideoAnalyzer.Side,
+        detectPose: @escaping (CIImage) throws -> VNHumanBodyPoseObservation?
+    ) -> AVVideoComposition {
         AVVideoComposition(asset: asset) { request in
             do {
                 let source = request.sourceImage
@@ -13,11 +20,7 @@ enum AnnotatedVideoRenderer {
                 guard extent.minX.isFinite, extent.minY.isFinite,
                       extent.width.isFinite, extent.height.isFinite,
                       extent.width > 0, extent.height > 0 else { throw RenderError.invalidFrame }
-                let scale = min(1, 1280 / max(extent.width, extent.height))
-                let visionImage = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-                let poseRequest = VNDetectHumanBodyPoseRequest()
-                try VNImageRequestHandler(ciImage: visionImage, orientation: .up, options: [:]).perform([poseRequest])
-                guard let observation = poseRequest.results?.first,
+                guard let observation = try detectPose(source),
                       let points = try VideoAnalyzer.points(for: side, observation: observation) else {
                     request.finish(with: source, context: nil)
                     return
@@ -39,6 +42,15 @@ enum AnnotatedVideoRenderer {
                 request.finish(with: error)
             }
         }
+    }
+
+    private static func detectPose(in image: CIImage) throws -> VNHumanBodyPoseObservation? {
+        let extent = image.extent
+        let scale = min(1, 1280 / max(extent.width, extent.height))
+        let visionImage = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let request = VNDetectHumanBodyPoseRequest()
+        try VNImageRequestHandler(ciImage: visionImage, orientation: .up, options: [:]).perform([request])
+        return request.results?.first
     }
 
     private static func pixelPoint(_ point: CGPoint, size: CGSize) -> CGPoint {

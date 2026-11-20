@@ -8,7 +8,7 @@ Para analizar un vídeo existente, pulsa **Analizar vídeo de la fototeca**, sel
 
 Durante el análisis se muestra el progreso aproximado de los instantes procesados. Se puede cancelar: la operación se detiene después del fotograma en curso y no se guardan resultados parciales. El porcentaje no representa la calidad de detección.
 
-El resultado muestra también el porcentaje de fotogramas con seguimiento válido y un recuento experimental de ciclos basado en cambios del ángulo de rodilla. Una interrupción larga del seguimiento no cuenta como ciclo. Con cinco muestras por segundo o movimientos que no atraviesan los umbrales, el recuento puede omitir ciclos: no es una medida de calidad del ajuste ni ha sido validado en iPhone.
+El resultado muestra también el porcentaje de fotogramas con seguimiento válido y un recuento experimental de ciclos basado en cambios del ángulo de rodilla. Una interrupción larga del seguimiento no cuenta como ciclo. Se detecta una fase flexionada por encima de 90° y otra extendida por debajo de 70°, según la convención de la app (0° corresponde a una rodilla recta). Con cinco muestras por segundo o movimientos que no atraviesan estos umbrales, el recuento puede omitir ciclos: no es una medida de calidad del ajuste ni ha sido validado en iPhone.
 
 Los resultados incluyen una gráfica de puntos de la métrica elegida para las muestras válidas del lado seleccionado; los huecos no son mediciones. El tiempo mostrado es el instante solicitado al vídeo, aproximadamente cada 0,2 segundos.
 

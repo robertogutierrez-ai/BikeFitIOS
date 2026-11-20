@@ -22,9 +22,9 @@ struct PedalingDetector {
         }
         lastTime = time
         let next: Phase?
-        if kneeAngle < 90 {
+        if kneeAngle > 90 {
             next = .flexed
-        } else if kneeAngle > 110 {
+        } else if kneeAngle < 70 {
             next = .extended
         } else {
             next = nil

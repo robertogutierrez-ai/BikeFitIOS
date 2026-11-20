@@ -38,6 +38,7 @@ final class SessionHistoryStoreTests: XCTestCase {
         """.utf8)
         let result = try JSONDecoder().decode(VideoAnalysisResult.self, from: data)
         XCTAssertNil(result.timeline)
+        XCTAssertNil(result.estimatedCycles)
         XCTAssertEqual(result.validFrames, 1)
     }
 

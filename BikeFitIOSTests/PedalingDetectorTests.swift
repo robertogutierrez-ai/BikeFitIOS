@@ -4,7 +4,7 @@ import XCTest
 final class PedalingDetectorTests: XCTestCase {
     func testCountsFlexedToExtendedTransitions() throws {
         var detector = PedalingDetector()
-        for (time, angle) in [(0.0, 80.0), (0.2, 120.0), (0.4, 80.0), (0.6, 120.0)] {
+        for (time, angle) in [(0.0, 100.0), (0.2, 60.0), (0.4, 100.0), (0.6, 60.0)] {
             try detector.add(kneeAngle: angle, time: time)
         }
         XCTAssertEqual(detector.cycles, 2)
@@ -12,18 +12,27 @@ final class PedalingDetectorTests: XCTestCase {
 
     func testDoesNotCountAcrossLongTrackingGap() throws {
         var detector = PedalingDetector()
-        try detector.add(kneeAngle: 80, time: 0)
-        try detector.add(kneeAngle: 120, time: 2)
+        try detector.add(kneeAngle: 100, time: 0)
+        try detector.add(kneeAngle: 60, time: 2)
         XCTAssertEqual(detector.cycles, 0)
     }
 
     func testRejectsOutOfOrderAndShortPhaseChanges() throws {
         var detector = PedalingDetector()
-        try detector.add(kneeAngle: 80, time: 0)
-        try detector.add(kneeAngle: 120, time: 0.05)
-        XCTAssertThrowsError(try detector.add(kneeAngle: 120, time: 0))
+        try detector.add(kneeAngle: 100, time: 0)
+        try detector.add(kneeAngle: 60, time: 0.05)
+        XCTAssertThrowsError(try detector.add(kneeAngle: 60, time: 0))
         XCTAssertEqual(detector.cycles, 0)
-        try detector.add(kneeAngle: 120, time: 0.2)
+        try detector.add(kneeAngle: 60, time: 0.2)
+        XCTAssertEqual(detector.cycles, 1)
+    }
+
+    func testStartingExtendedDoesNotCountUntilFlexionThenExtension() throws {
+        var detector = PedalingDetector()
+        try detector.add(kneeAngle: 30, time: 0)
+        try detector.add(kneeAngle: 100, time: 0.2)
+        XCTAssertEqual(detector.cycles, 0)
+        try detector.add(kneeAngle: 30, time: 0.4)
         XCTAssertEqual(detector.cycles, 1)
     }
 }

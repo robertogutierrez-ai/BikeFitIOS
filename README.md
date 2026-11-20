@@ -8,6 +8,8 @@ Para analizar un vídeo existente, pulsa **Analizar vídeo de la fototeca**, sel
 
 Durante el análisis se muestra el progreso aproximado de los instantes procesados. Se puede cancelar: la operación se detiene después del fotograma en curso y no se guardan resultados parciales. El porcentaje no representa la calidad de detección.
 
+El resultado muestra también el porcentaje de fotogramas con seguimiento válido y un recuento experimental de ciclos basado en cambios del ángulo de rodilla. Una interrupción larga del seguimiento no cuenta como ciclo. Con cinco muestras por segundo o movimientos que no atraviesan los umbrales, el recuento puede omitir ciclos: no es una medida de calidad del ajuste ni ha sido validado en iPhone.
+
 Los resultados incluyen una gráfica de puntos de la métrica elegida para las muestras válidas del lado seleccionado; los huecos no son mediciones. El tiempo mostrado es el instante solicitado al vídeo, aproximadamente cada 0,2 segundos.
 
 Tras el análisis puedes guardar explícitamente los resultados en el historial de sesiones, consultarlos y eliminarlos desde el inicio. Selecciona dos sesiones para comparar sus rangos; las diferencias no indican por sí solas una mejora y pueden depender del lado y del encuadre. Se almacenan los rangos, el lado, los recuentos de fotogramas y las muestras para la gráfica, no el vídeo. Las sesiones antiguas pueden no contener todas las métricas ni una gráfica. A diferencia de Android, el guardado no es automático.

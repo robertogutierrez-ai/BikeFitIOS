@@ -18,6 +18,7 @@ struct VideoAnalysisResult: Codable {
     let sampledFrames: Int
     let side: String
     var timeline: [AngleSample]? = nil
+    var estimatedCycles: Int? = nil
 }
 
 enum VideoAnalyzer {
@@ -94,12 +95,19 @@ enum VideoAnalyzer {
                 }
             }
         }
+        var detector = PedalingDetector()
+        for sample in validSamples {
+            if let knee = sample.angles[.knee] {
+                try detector.add(kneeAngle: knee, time: sample.time)
+            }
+        }
         return VideoAnalysisResult(
             ranges: ranges,
             validFrames: validSamples.count,
             sampledFrames: sampled,
             side: selected.title,
-            timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) }
+            timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) },
+            estimatedCycles: detector.cycles
         )
     }
 

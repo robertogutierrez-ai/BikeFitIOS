@@ -210,6 +210,15 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Resultados básicos").font(.title2.bold())
                 Text("Lado \(result.side): \(result.validFrames) de \(result.sampledFrames) fotogramas válidos.")
+                if result.sampledFrames > 0 {
+                    Text(String(format: "Seguimiento válido: %.0f %%", 100.0 * Double(result.validFrames) / Double(result.sampledFrames)))
+                }
+                if let cycles = result.estimatedCycles {
+                    Text("Ciclos aproximados: \(cycles)")
+                    Text("Estimación experimental basada en la rodilla. La detección puede omitir ciclos y no mide la calidad del ajuste.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(JointAngle.allCases, id: \.self) { angle in
                     if let range = result.ranges[angle] {
                         HStack {

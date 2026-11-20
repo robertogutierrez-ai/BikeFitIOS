@@ -30,6 +30,9 @@ struct SessionHistoryView: View {
                         Text(session.savedAt.formatted(date: .abbreviated, time: .shortened))
                             .font(.headline)
                         Text("Lado \(session.result.side): \(session.result.validFrames) de \(session.result.sampledFrames) fotogramas válidos.")
+                        if let cycles = session.result.estimatedCycles {
+                            Text("Ciclos aproximados: \(cycles) · estimación experimental")
+                        }
                         ForEach(JointAngle.allCases, id: \.self) { angle in
                             if let range = session.result.ranges[angle] {
                                 Text("\(angle.rawValue): \(String(format: "%.1f° – %.1f°", range.minimum, range.maximum))")

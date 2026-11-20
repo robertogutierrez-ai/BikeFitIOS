@@ -4,7 +4,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, review, results
+        case home, capture, review, results, cleats
     }
 
     @State private var screen: Screen = .home
@@ -33,6 +33,8 @@ struct ContentView: View {
                     if let result = result {
                         results(result)
                     }
+                case .cleats:
+                    CleatAssistantView(onClose: { screen = .home })
                 }
             }
             .navigationTitle("BikeFit")
@@ -55,6 +57,13 @@ struct ContentView: View {
                     screen = .capture
                 }
                 .buttonStyle(.borderedProminent)
+                Divider()
+                Text("Asistente de calas").font(.title2.bold())
+                Text("Fotografía cada suela y marca manualmente los ejes de la zapatilla y de la cala.")
+                Button("Abrir asistente de calas") {
+                    screen = .cleats
+                }
+                .buttonStyle(.bordered)
             }
             .padding()
         }

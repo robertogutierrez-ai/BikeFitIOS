@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-struct CleatMeasurement: Equatable {
+struct CleatMeasurement: Codable, Equatable {
     let rotationDegrees: Double
     let lateralRelativeToShoe: Double
     let longitudinalRelativeToShoe: Double

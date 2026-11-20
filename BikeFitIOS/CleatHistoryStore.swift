@@ -28,8 +28,6 @@ struct CleatSetup: Codable, Identifiable, Equatable {
     }
 }
 
-extension CleatMeasurement: Codable {}
-
 struct CleatHistoryStore {
     static let maximumEntries = 10
 

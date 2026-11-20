@@ -7,11 +7,17 @@ struct AngleRange: Codable {
     var maximum: Double
 }
 
+struct AngleSample: Codable {
+    let time: Double
+    let angles: [JointAngle: Double]
+}
+
 struct VideoAnalysisResult: Codable {
     let ranges: [JointAngle: AngleRange]
     let validFrames: Int
     let sampledFrames: Int
     let side: String
+    var timeline: [AngleSample]? = nil
 }
 
 enum VideoAnalyzer {
@@ -31,6 +37,7 @@ enum VideoAnalyzer {
 
     private struct Sample {
         let side: Side
+        let time: Double
         let angles: [JointAngle: Double]
     }
 
@@ -56,7 +63,7 @@ enum VideoAnalyzer {
                     if let points = try points(for: side, observation: observation) {
                         let angles = AngleCalculator.calculate(points, width: CGFloat(image.width), height: CGFloat(image.height))
                         if AngleCalculator.requiredAngles.allSatisfy({ angles[$0] != nil }) {
-                            samples.append(Sample(side: side, angles: angles))
+                            samples.append(Sample(side: side, time: time, angles: angles))
                         }
                     }
                 }
@@ -80,7 +87,13 @@ enum VideoAnalyzer {
                 }
             }
         }
-        return VideoAnalysisResult(ranges: ranges, validFrames: validSamples.count, sampledFrames: sampled, side: selected.title)
+        return VideoAnalysisResult(
+            ranges: ranges,
+            validFrames: validSamples.count,
+            sampledFrames: sampled,
+            side: selected.title,
+            timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) }
+        )
     }
 
     private static func points(for side: Side, observation: VNHumanBodyPoseObservation) throws -> BodyPoints? {

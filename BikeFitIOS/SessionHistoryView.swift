@@ -35,6 +35,11 @@ struct SessionHistoryView: View {
                                 Text("\(angle.rawValue): \(String(format: "%.1f° – %.1f°", range.minimum, range.maximum))")
                             }
                         }
+                        if let samples = session.result.timeline, !samples.isEmpty {
+                            DisclosureGroup("Ver gráfica") {
+                                AngleTimelineView(samples: samples)
+                            }
+                        }
                         if sessions.count >= 2 {
                             Button(selectionTitle(for: session)) {
                                 toggleSelection(session)

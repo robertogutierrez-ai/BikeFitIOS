@@ -11,7 +11,8 @@ final class SessionHistoryStoreTests: XCTestCase {
 
         let result = VideoAnalysisResult(
             ranges: [.knee: AngleRange(minimum: 10, maximum: 25)],
-            validFrames: 5, sampledFrames: 8, side: "izquierdo"
+            validFrames: 5, sampledFrames: 8, side: "izquierdo",
+            timeline: [AngleSample(time: 0.4, angles: [.knee: 10])]
         )
         let first = try store.save(result)
         let second = try store.save(result)
@@ -23,10 +24,21 @@ final class SessionHistoryStoreTests: XCTestCase {
         XCTAssertEqual(restored.result.validFrames, 5)
         XCTAssertEqual(restored.result.sampledFrames, 8)
         XCTAssertEqual(restored.result.side, "izquierdo")
+        XCTAssertEqual(restored.result.timeline?.first?.time, 0.4)
+        XCTAssertEqual(restored.result.timeline?.first?.angles[.knee], 10)
 
         try store.delete(first)
         let remaining = try store.load()
         XCTAssertEqual(remaining.map(\.id), [second.id])
+    }
+
+    func testOlderResultWithoutTimelineRemainsReadable() throws {
+        let data = Data("""
+        {"ranges":[],"validFrames":1,"sampledFrames":2,"side":"izquierdo"}
+        """.utf8)
+        let result = try JSONDecoder().decode(VideoAnalysisResult.self, from: data)
+        XCTAssertNil(result.timeline)
+        XCTAssertEqual(result.validFrames, 1)
     }
 
     func testCorruptSessionIsReported() throws {

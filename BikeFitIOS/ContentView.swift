@@ -186,6 +186,9 @@ struct ContentView: View {
                         }
                     }
                 }
+                if let samples = result.timeline, !samples.isEmpty {
+                    AngleTimelineView(samples: samples)
+                }
                 Text("En los ángulos articulares una articulación estirada se aproxima a 0°. Las inclinaciones se miden respecto a la horizontal. Los resultados son orientativos, no constituyen un diagnóstico ni una recomendación de ajuste.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

@@ -359,6 +359,16 @@ private struct CaptureScreen: View {
             .padding(.horizontal)
             Text(camera.recording ? "Grabando · objetivo: 15 segundos" : "Graba unos 15 segundos · Sin sonido")
                 .font(.caption)
+            if camera.starting {
+                ProgressView("Iniciando cámara…")
+            } else if !camera.ready {
+                Button("Reintentar cámara") { camera.start() }
+                    .disabled(camera.finishing)
+            }
+            Button(camera.position == .back ? "Usar cámara frontal" : "Usar cámara trasera") {
+                camera.switchCamera()
+            }
+            .disabled(!camera.canSwitchCamera)
             HStack {
                 Button("Cancelar") { onCancel() }
                     .disabled(camera.finishing)
@@ -374,7 +384,7 @@ private struct CaptureScreen: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!camera.ready || camera.finishing)
+                .disabled(!camera.ready || camera.finishing || camera.switching)
             }
             .padding(.horizontal)
         }

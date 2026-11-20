@@ -172,26 +172,17 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     }
 
     private func replaceCamera(position: AVCaptureDevice.Position) throws {
-        guard let previous = input,
-              let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
-            throw CameraError.cameraUnavailable
+        guard let previous = input else { throw CameraError.configurationFailed }
+        do {
+            input = try CameraInputSwitcher.replace(in: session, current: previous, position: position)
+        } catch CameraInputSwitcher.SwitchError.restoreFailed {
+            session.beginConfiguration()
+            session.removeOutput(output)
+            session.commitConfiguration()
+            input = nil
+            configured = false
+            throw CameraInputSwitcher.SwitchError.restoreFailed
         }
-        let replacement = try AVCaptureDeviceInput(device: device)
-        session.beginConfiguration()
-        defer { session.commitConfiguration() }
-        session.removeInput(previous)
-        guard session.canAddInput(replacement) else {
-            if session.canAddInput(previous) {
-                session.addInput(previous)
-            } else {
-                session.removeOutput(output)
-                input = nil
-                configured = false
-            }
-            throw CameraError.configurationFailed
-        }
-        session.addInput(replacement)
-        input = replacement
     }
 
     func shutdown() {

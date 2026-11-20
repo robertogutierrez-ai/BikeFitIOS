@@ -7,36 +7,55 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureFileOutputRecord
     private let output = AVCaptureMovieFileOutput()
     private let queue = DispatchQueue(label: "com.bikefit.camera")
     private var configured = false
+    private var input: AVCaptureDeviceInput?
     private var shouldRun = false
     private var discardRecording = false
+    private var generation = 0
     var onFinished: ((URL) -> Void)?
 
     @Published private(set) var ready = false
+    @Published private(set) var starting = false
     @Published private(set) var recording = false
     @Published private(set) var finishing = false
+    @Published private(set) var switching = false
+    @Published private(set) var position: AVCaptureDevice.Position = .back
     @Published var errorMessage: String?
 
+    var canSwitchCamera: Bool {
+        Self.canSwitchCamera(ready: ready, recording: recording, finishing: finishing, switching: switching)
+    }
+
+    static func canSwitchCamera(ready: Bool, recording: Bool, finishing: Bool, switching: Bool) -> Bool {
+        ready && !recording && !finishing && !switching
+    }
+
     func start() {
+        guard !ready, !starting else { return }
+        starting = true
+        let id = generation
         queue.async { self.shouldRun = true }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            configureAndStart()
+            configureAndStart(id: id)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
-                if granted {
-                    self.configureAndStart()
-                } else {
-                    DispatchQueue.main.async {
+                DispatchQueue.main.async {
+                    guard self.generation == id else { return }
+                    if granted {
+                        self.configureAndStart(id: id)
+                    } else {
+                        self.starting = false
                         self.errorMessage = "Necesitamos permiso de cámara. Puedes activarlo en Ajustes."
                     }
                 }
             }
         default:
+            starting = false
             errorMessage = "Necesitamos permiso de cámara. Puedes activarlo en Ajustes."
         }
     }
 
-    private func configureAndStart() {
+    private func configureAndStart(id: Int) {
         queue.async {
             guard self.shouldRun else { return }
             do {
@@ -52,6 +71,7 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureFileOutputRecord
                     }
                     self.session.addInput(input)
                     self.session.addOutput(self.output)
+                    self.input = input
                     if self.session.canSetSessionPreset(.high) {
                         self.session.sessionPreset = .high
                     }
@@ -60,14 +80,21 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureFileOutputRecord
                 if !self.session.isRunning {
                     self.session.startRunning()
                 }
+                let running = self.session.isRunning
+                let position = self.input?.device.position
                 DispatchQueue.main.async {
-                    self.ready = self.session.isRunning
+                    guard self.generation == id else { return }
+                    self.starting = false
+                    self.ready = running
+                    if let position = position { self.position = position }
                     if !self.ready {
                         self.errorMessage = "No se pudo iniciar la cámara."
                     }
                 }
             } catch {
                 DispatchQueue.main.async {
+                    guard self.generation == id else { return }
+                    self.starting = false
                     self.errorMessage = "No se pudo iniciar la cámara: \(error.localizedDescription)"
                 }
             }
@@ -75,15 +102,55 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureFileOutputRecord
     }
 
     func record(orientation: AVCaptureVideoOrientation) {
-        guard ready, !recording, !finishing else { return }
+        guard ready, !recording, !finishing, !switching else { return }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("bikefit-\(UUID().uuidString).mov")
         discardRecording = false
-        if let connection = output.connection(with: .video), connection.isVideoOrientationSupported {
-            connection.videoOrientation = orientation
+        guard let connection = output.connection(with: .video), connection.isVideoOrientationSupported else {
+            errorMessage = "No se puede orientar el vídeo de la cámara."
+            return
+        }
+        connection.videoOrientation = orientation
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = false
         }
         recording = true
         output.startRecording(to: url, recordingDelegate: self)
+    }
+
+    func switchCamera() {
+        guard canSwitchCamera else { return }
+        switching = true
+        let id = generation
+        let next: AVCaptureDevice.Position = position == .back ? .front : .back
+        queue.async {
+            do {
+                guard let input = self.input else { throw CaptureError.configurationFailed }
+                self.input = try CameraInputSwitcher.replace(in: self.session, current: input, position: next)
+                DispatchQueue.main.async {
+                    guard self.generation == id else { return }
+                    self.position = next
+                    self.switching = false
+                }
+            } catch {
+                let restoreFailed = (error as? CameraInputSwitcher.SwitchError) == .restoreFailed
+                if restoreFailed {
+                    if self.session.isRunning { self.session.stopRunning() }
+                    self.session.beginConfiguration()
+                    self.session.removeOutput(self.output)
+                    self.session.commitConfiguration()
+                    self.input = nil
+                    self.configured = false
+                }
+                DispatchQueue.main.async {
+                    guard self.generation == id else { return }
+                    self.switching = false
+                    if restoreFailed { self.ready = false }
+                    self.errorMessage = "No se pudo cambiar de cámara: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     func stop() {
@@ -93,11 +160,14 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureFileOutputRecord
     }
 
     func shutdown() {
+        generation += 1
         if recording {
             discardRecording = true
             stop()
         }
         ready = false
+        starting = false
+        switching = false
         queue.async {
             self.shouldRun = false
             if self.session.isRunning {

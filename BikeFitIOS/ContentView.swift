@@ -19,6 +19,9 @@ struct ContentView: View {
     @State private var importError: String?
     @State private var savedResult = false
     @State private var activeProfile: ReferenceProfile?
+    @State private var analysisID: UUID?
+    @State private var analysisProgress: Double?
+    @State private var isCancellingAnalysis = false
 
     var body: some View {
         NavigationStack {
@@ -135,9 +138,14 @@ struct ContentView: View {
         ReviewScreen(
             url: url,
             isAnalyzing: isAnalyzing,
+            progress: analysisProgress,
+            isCancelling: isCancellingAnalysis,
             error: analysisError,
             onAnalyze: { startAnalysis(url) },
-            onCancelAnalysis: { analysisTask?.cancel() },
+            onCancelAnalysis: {
+                isCancellingAnalysis = true
+                analysisTask?.cancel()
+            },
             onRetake: {
                 if removeVideo() {
                     analysisError = nil
@@ -156,11 +164,20 @@ struct ContentView: View {
     private func startAnalysis(_ url: URL) {
         guard !isAnalyzing else { return }
         isAnalyzing = true
+        isCancellingAnalysis = false
+        analysisProgress = nil
+        let id = UUID()
+        analysisID = id
         analysisError = nil
         analysisTask = Task {
             do {
                 let worker = Task.detached(priority: .userInitiated) {
-                    try VideoAnalyzer.analyze(url: url)
+                    try VideoAnalyzer.analyze(url: url) { progress in
+                        DispatchQueue.main.async {
+                            guard analysisID == id, isAnalyzing, !isCancellingAnalysis else { return }
+                            analysisProgress = progress
+                        }
+                    }
                 }
                 let measured = try await withTaskCancellationHandler {
                     try await worker.value
@@ -174,9 +191,16 @@ struct ContentView: View {
             } catch is CancellationError {
                 analysisError = nil
             } catch {
-                analysisError = "No se pudo analizar el vídeo: \(error.localizedDescription)"
+                if Task.isCancelled {
+                    analysisError = nil
+                } else {
+                    analysisError = "No se pudo analizar el vídeo: \(error.localizedDescription)"
+                }
             }
             isAnalyzing = false
+            isCancellingAnalysis = false
+            analysisID = nil
+            analysisProgress = nil
             analysisTask = nil
         }
     }
@@ -364,15 +388,19 @@ private struct CaptureScreen: View {
 private struct ReviewScreen: View {
     @State private var player: AVPlayer
     let isAnalyzing: Bool
+    let progress: Double?
+    let isCancelling: Bool
     let error: String?
     let onAnalyze: () -> Void
     let onCancelAnalysis: () -> Void
     let onRetake: () -> Void
     let onClose: () -> Void
 
-    init(url: URL, isAnalyzing: Bool, error: String?, onAnalyze: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
         _player = State(initialValue: AVPlayer(url: url))
         self.isAnalyzing = isAnalyzing
+        self.progress = progress
+        self.isCancelling = isCancelling
         self.error = error
         self.onAnalyze = onAnalyze
         self.onCancelAnalysis = onCancelAnalysis
@@ -388,8 +416,17 @@ private struct ReviewScreen: View {
                 VideoPlayer(player: player)
                     .frame(height: 240)
                 if isAnalyzing {
-                    ProgressView("Analizando vídeo…")
+                    if let progress = progress {
+                        ProgressView("Analizando vídeo · \(Int(progress * 100)) %", value: progress, total: 1)
+                    } else {
+                        ProgressView("Preparando análisis…")
+                    }
+                    if isCancelling {
+                        Text("Cancelando al terminar el fotograma actual…")
+                            .font(.footnote)
+                    }
                     Button("Cancelar análisis", action: onCancelAnalysis)
+                        .disabled(isCancelling)
                 } else {
                     if let error = error {
                         Text(error).foregroundStyle(.red)

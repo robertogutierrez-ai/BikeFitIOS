@@ -41,7 +41,7 @@ enum VideoAnalyzer {
         let angles: [JointAngle: Double]
     }
 
-    static func analyze(url: URL) throws -> VideoAnalysisResult {
+    static func analyze(url: URL, onProgress: @escaping (Double) -> Void) throws -> VideoAnalysisResult {
         let asset = AVURLAsset(url: url)
         let duration = asset.duration.seconds
         guard duration.isFinite, duration > 0 else { throw AnalysisError.invalidVideo }
@@ -52,6 +52,8 @@ enum VideoAnalyzer {
         var samples: [Sample] = []
         var sampled = 0
         var time = 0.0
+        var lastUpdate = ProcessInfo.processInfo.systemUptime
+        onProgress(0)
         while time < duration {
             try Task.checkCancellation()
             let image = try generator.copyCGImage(at: CMTime(seconds: time, preferredTimescale: 600), actualTime: nil)
@@ -67,6 +69,11 @@ enum VideoAnalyzer {
                         }
                     }
                 }
+            }
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastUpdate >= 0.2 || time + 0.2 >= duration {
+                onProgress(progress(after: time, duration: duration))
+                lastUpdate = now
             }
             time += 0.2
         }
@@ -94,6 +101,10 @@ enum VideoAnalyzer {
             side: selected.title,
             timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) }
         )
+    }
+
+    static func progress(after sampleTime: Double, duration: Double) -> Double {
+        min((sampleTime + 0.2) / duration, 1)
     }
 
     private static func points(for side: Side, observation: VNHumanBodyPoseObservation) throws -> BodyPoints? {

@@ -6,6 +6,8 @@ La cámara muestra un marco con márgenes, una línea central, una cruz y una l�
 
 Para analizar un vídeo existente, pulsa **Analizar vídeo de la fototeca**, selecciónalo y revísalo antes de iniciar el análisis. La app crea una copia temporal: al cerrar, finalizar o repetir se elimina esa copia, no el vídeo original. Los vídeos alojados en iCloud pueden necesitar descarga y espacio disponible. El selector solo entrega a la app el vídeo elegido.
 
+Durante el análisis se muestra el progreso aproximado de los instantes procesados. Se puede cancelar: la operación se detiene después del fotograma en curso y no se guardan resultados parciales. El porcentaje no representa la calidad de detección.
+
 Los resultados incluyen una gráfica de puntos de la métrica elegida para las muestras válidas del lado seleccionado; los huecos no son mediciones. El tiempo mostrado es el instante solicitado al vídeo, aproximadamente cada 0,2 segundos.
 
 Tras el análisis puedes guardar explícitamente los resultados en el historial de sesiones, consultarlos y eliminarlos desde el inicio. Selecciona dos sesiones para comparar sus rangos; las diferencias no indican por sí solas una mejora y pueden depender del lado y del encuadre. Se almacenan los rangos, el lado, los recuentos de fotogramas y las muestras para la gráfica, no el vídeo. Las sesiones antiguas pueden no contener todas las métricas ni una gráfica. A diferencia de Android, el guardado no es automático.

@@ -10,6 +10,11 @@ struct MediaPipeLandmark {
     let presence: Float?
 }
 
+struct MediaPipeMeasurement {
+    let angles: [JointAngle: Double]
+    let points: BodyPoints
+}
+
 final class MediaPipePoseEstimator {
     private let landmarker: PoseLandmarker
 
@@ -24,7 +29,7 @@ final class MediaPipePoseEstimator {
         landmarker = try PoseLandmarker(options: options)
     }
 
-    func measure(image: CGImage, time: Double) throws -> [VideoAnalyzer.Side: [JointAngle: Double]] {
+    func measure(image: CGImage, time: Double) throws -> [VideoAnalyzer.Side: MediaPipeMeasurement] {
         guard time.isFinite, time >= 0, time < Double(Int.max) / 1000 else { throw PoseError.invalidTimestamp }
         let rgba = try Self.rgbaImage(image)
         let input = try MPImage(uiImage: UIImage(cgImage: rgba))
@@ -34,12 +39,12 @@ final class MediaPipePoseEstimator {
         let landmarks = pose.map {
             MediaPipeLandmark(x: $0.x, y: $0.y, visibility: $0.visibility?.floatValue, presence: $0.presence?.floatValue)
         }
-        var measured: [VideoAnalyzer.Side: [JointAngle: Double]] = [:]
+        var measured: [VideoAnalyzer.Side: MediaPipeMeasurement] = [:]
         for side in VideoAnalyzer.Side.allCases {
             if let points = Self.points(landmarks, side: side) {
                 let angles = AngleCalculator.calculate(points, width: CGFloat(image.width), height: CGFloat(image.height))
                 if AngleCalculator.requiredAngles.allSatisfy({ angles[$0] != nil }) {
-                    measured[side] = angles
+                    measured[side] = MediaPipeMeasurement(angles: angles, points: points)
                 }
             }
         }

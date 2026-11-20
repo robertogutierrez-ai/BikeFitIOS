@@ -12,7 +12,8 @@ final class SessionHistoryStoreTests: XCTestCase {
         let result = VideoAnalysisResult(
             ranges: [.knee: AngleRange(minimum: 10, maximum: 25)],
             validFrames: 5, sampledFrames: 8, side: "izquierdo",
-            timeline: [AngleSample(time: 0.4, angles: [.knee: 10])]
+            timeline: [AngleSample(time: 0.4, angles: [.knee: 10])],
+            kops: KopsVideoResult(offsetMillimeters: 12, time: 0.4, validSamples: 4, facingRight: true)
         )
         let first = try store.save(result)
         let second = try store.save(result)
@@ -26,6 +27,8 @@ final class SessionHistoryStoreTests: XCTestCase {
         XCTAssertEqual(restored.result.side, "izquierdo")
         XCTAssertEqual(restored.result.timeline?.first?.time, 0.4)
         XCTAssertEqual(restored.result.timeline?.first?.angles[.knee], 10)
+        XCTAssertEqual(restored.result.kops?.offsetMillimeters, 12)
+        XCTAssertEqual(restored.result.kops?.validSamples, 4)
 
         try store.delete(first)
         let remaining = try store.load()
@@ -40,6 +43,7 @@ final class SessionHistoryStoreTests: XCTestCase {
         XCTAssertNil(result.timeline)
         XCTAssertNil(result.estimatedCycles)
         XCTAssertNil(result.engine)
+        XCTAssertNil(result.kops)
         XCTAssertEqual(result.validFrames, 1)
     }
 

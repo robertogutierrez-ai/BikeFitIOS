@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, live, review, results, annotatedVideo, cleats, kops, history, profiles
+        case home, capture, live, review, results, annotatedVideo, cleats, kops, kopsVideo, history, profiles
     }
 
     @State private var screen: Screen = .home
@@ -52,6 +52,15 @@ struct ContentView: View {
                     CleatAssistantView(onClose: { screen = .home })
                 case .kops:
                     KopsAssistantView(onClose: { screen = .home })
+                case .kopsVideo:
+                    if let url = videoURL {
+                        KopsVideoCalibrationView(url: url) { calibration in
+                            screen = .review
+                            startAnalysis(url, engine: .mediaPipe, calibration: calibration)
+                        } onCancel: {
+                            screen = .review
+                        }
+                    }
                 case .history:
                     SessionHistoryView(onClose: { screen = .home })
                 case .profiles:
@@ -162,6 +171,7 @@ struct ContentView: View {
             error: analysisError,
             onAnalyze: { startAnalysis(url, engine: .vision) },
             onAnalyzeMediaPipe: { startAnalysis(url, engine: .mediaPipe) },
+            onAnalyzeKops: { screen = .kopsVideo },
             onCancelAnalysis: {
                 isCancellingAnalysis = true
                 analysisTask?.cancel()
@@ -181,7 +191,7 @@ struct ContentView: View {
         )
     }
 
-    private func startAnalysis(_ url: URL, engine: AnalysisEngine) {
+    private func startAnalysis(_ url: URL, engine: AnalysisEngine, calibration: KopsCalibration? = nil) {
         guard !isAnalyzing else { return }
         isAnalyzing = true
         isCancellingAnalysis = false
@@ -192,7 +202,7 @@ struct ContentView: View {
         analysisTask = Task {
             do {
                 let worker = Task.detached(priority: .userInitiated) {
-                    try VideoAnalyzer.analyze(url: url, engine: engine) { progress in
+                    try VideoAnalyzer.analyze(url: url, engine: engine, kopsCalibration: calibration) { progress in
                         DispatchQueue.main.async {
                             guard analysisID == id, isAnalyzing, !isCancellingAnalysis else { return }
                             analysisProgress = progress
@@ -246,6 +256,20 @@ struct ContentView: View {
                         .font(.footnote)
                     if footCount == 0 {
                         Text("No hay mediciones del pie: comprueba que la punta sea visible.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let kops = result.kops {
+                        Text("KOPS en vídeo · experimental").font(.headline)
+                        if let offset = kops.offsetMillimeters, let time = kops.time {
+                            Text(String(format: "Desplazamiento estimado: %+.1f mm · instante %.2f s", offset, time))
+                            Text("Positivo hacia el avance indicado (\(kops.facingRight ? "derecha" : "izquierda") de la imagen). Calculado en el tobillo más adelantado entre \(kops.validSamples) muestras con punta visible; el eje del pedal se aproxima entre tobillo y punta.")
+                                .font(.footnote)
+                        } else {
+                            Text("No disponible: no se detectó una punta de pie válida en el lado seleccionado.")
+                                .font(.footnote)
+                        }
+                        Text("Medición 2D no validada: depende de la calibración, perspectiva y seguimiento. No es un diagnóstico ni recomienda ajustes.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -453,11 +477,12 @@ private struct ReviewScreen: View {
     let error: String?
     let onAnalyze: () -> Void
     let onAnalyzeMediaPipe: () -> Void
+    let onAnalyzeKops: () -> Void
     let onCancelAnalysis: () -> Void
     let onRetake: () -> Void
     let onClose: () -> Void
 
-    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onAnalyzeMediaPipe: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onAnalyzeMediaPipe: @escaping () -> Void, onAnalyzeKops: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
         _player = State(initialValue: AVPlayer(url: url))
         self.isAnalyzing = isAnalyzing
         self.progress = progress
@@ -465,6 +490,7 @@ private struct ReviewScreen: View {
         self.error = error
         self.onAnalyze = onAnalyze
         self.onAnalyzeMediaPipe = onAnalyzeMediaPipe
+        self.onAnalyzeKops = onAnalyzeKops
         self.onCancelAnalysis = onCancelAnalysis
         self.onRetake = onRetake
         self.onClose = onClose
@@ -495,6 +521,8 @@ private struct ReviewScreen: View {
                     }
                     Button("Analizar vídeo", action: onAnalyze).buttonStyle(.borderedProminent)
                     Button("Analizar con MediaPipe (experimental)", action: onAnalyzeMediaPipe)
+                        .buttonStyle(.bordered)
+                    Button("Calibrar y analizar KOPS en vídeo", action: onAnalyzeKops)
                         .buttonStyle(.bordered)
                     Text("MediaPipe puede medir también tobillo y pie si detecta la punta. Los motores pueden producir resultados distintos.")
                         .font(.footnote)

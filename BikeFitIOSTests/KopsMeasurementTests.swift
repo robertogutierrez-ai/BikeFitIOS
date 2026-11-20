@@ -26,6 +26,45 @@ final class KopsMeasurementTests: XCTestCase {
         XCTAssertNil(KopsMeasurement.calculate(referenceStart: point, referenceEnd: end,
                                                knee: point, pedal: end, referenceMillimeters: 0))
         XCTAssertNil(KopsMeasurement.calculate(referenceStart: point, referenceEnd: end,
-                                               knee: CGPoint(x: .nan, y: 0), pedal: end, referenceMillimeters: 100))
+                                               knee: CGPoint(x: CGFloat.nan, y: 0), pedal: end, referenceMillimeters: 100))
+    }
+
+    func testVideoTrackerUsesForwardAnkleAndEstimatedPedal() throws {
+        func pose(knee: CGFloat, ankle: CGFloat, foot: CGFloat?) -> BodyPoints {
+            BodyPoints(shoulder: .zero, elbow: .zero, wrist: .zero, hip: .zero,
+                       knee: CGPoint(x: knee, y: 0), ankle: CGPoint(x: ankle, y: 0),
+                       foot: foot.map { CGPoint(x: $0, y: 0) })
+        }
+        var right = KopsVideoTracker(calibration: KopsCalibration(millimetersPerImageWidth: 1000, facingRight: true))
+        right.add(points: pose(knee: 0.6, ankle: 0.4, foot: 0.5), time: 0)
+        right.add(points: pose(knee: 0.8, ankle: 0.6, foot: 0.8), time: 1)
+        right.add(points: pose(knee: 0.9, ankle: 0.9, foot: nil), time: 2)
+        XCTAssertEqual(try XCTUnwrap(right.result.offsetMillimeters), 100, accuracy: 0.001)
+        XCTAssertEqual(right.result.time, 1)
+        XCTAssertEqual(right.result.validSamples, 2)
+
+        var left = KopsVideoTracker(calibration: KopsCalibration(millimetersPerImageWidth: 1000, facingRight: false))
+        left.add(points: pose(knee: 0.4, ankle: 0.6, foot: 0.5), time: 0)
+        left.add(points: pose(knee: 0.2, ankle: 0.4, foot: 0.2), time: 1)
+        XCTAssertEqual(try XCTUnwrap(left.result.offsetMillimeters), 100, accuracy: 0.001)
+        XCTAssertEqual(left.result.time, 1)
+    }
+
+    func testVideoTrackerReturnsUnavailableWithoutToe() {
+        let points = BodyPoints(shoulder: .zero, elbow: .zero, wrist: .zero, hip: .zero,
+                                knee: .zero, ankle: .zero)
+        var tracker = KopsVideoTracker(calibration: KopsCalibration(millimetersPerImageWidth: 1000, facingRight: true))
+        tracker.add(points: points, time: 0)
+        XCTAssertNil(tracker.result.offsetMillimeters)
+        XCTAssertNil(tracker.result.time)
+        XCTAssertEqual(tracker.result.validSamples, 0)
+    }
+
+    func testAnalysisRejectsCalibrationWithWrongEngineOrInvalidScale() {
+        let url = URL(fileURLWithPath: "unused")
+        let calibration = KopsCalibration(millimetersPerImageWidth: 1000, facingRight: true)
+        XCTAssertThrowsError(try VideoAnalyzer.analyze(url: url, engine: .vision, kopsCalibration: calibration) { _ in })
+        let invalid = KopsCalibration(millimetersPerImageWidth: .infinity, facingRight: true)
+        XCTAssertThrowsError(try VideoAnalyzer.analyze(url: url, engine: .mediaPipe, kopsCalibration: invalid) { _ in })
     }
 }

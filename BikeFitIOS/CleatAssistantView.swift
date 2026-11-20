@@ -285,6 +285,7 @@ struct ImagePointMarkingView: View {
     let image: UIImage
     @Binding var points: [CGPoint]
     let accessibilityDescription: String
+    var pointLimit = 4
 
     var body: some View {
         GeometryReader { geometry in
@@ -313,7 +314,7 @@ struct ImagePointMarkingView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onEnded { value in
-                guard points.count < 4, rect.contains(value.location), rect.width > 0 else { return }
+                guard points.count < pointLimit, rect.contains(value.location), rect.width > 0 else { return }
                 points.append(CGPoint(
                     x: (value.location.x - rect.minX) / rect.width,
                     y: (value.location.y - rect.minY) / rect.width

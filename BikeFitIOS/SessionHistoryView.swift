@@ -41,6 +41,17 @@ struct SessionHistoryView: View {
                         if let cycles = session.result.estimatedCycles {
                             Text("Ciclos aproximados: \(cycles) · estimación experimental")
                         }
+                        if let kops = session.result.kops {
+                            if let offset = kops.offsetMillimeters, let time = kops.time {
+                                Text(String(format: "KOPS experimental: %+.1f mm · %.2f s · %d muestras", offset, time, kops.validSamples))
+                                Text("Positivo hacia el avance indicado (\(kops.facingRight ? "derecha" : "izquierda") de la imagen); pedal aproximado entre tobillo y punta. No es un diagnóstico ni una recomendación de ajuste.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("KOPS no disponible: no hubo muestras válidas del pie.")
+                                    .font(.footnote)
+                            }
+                        }
                         ForEach(JointAngle.allCases, id: \.self) { angle in
                             if let range = session.result.ranges[angle] {
                                 Text("\(angle.rawValue): \(String(format: "%.1f° – %.1f°", range.minimum, range.maximum))")

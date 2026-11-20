@@ -25,6 +25,7 @@ struct VideoAnalysisResult: Codable {
     var timeline: [AngleSample]? = nil
     var estimatedCycles: Int? = nil
     var engine: AnalysisEngine? = nil
+    var kops: KopsVideoResult? = nil
 }
 
 enum VideoAnalyzer {
@@ -46,11 +47,17 @@ enum VideoAnalyzer {
         let side: Side
         let time: Double
         let angles: [JointAngle: Double]
+        let points: BodyPoints?
     }
 
     static func analyze(
-        url: URL, engine: AnalysisEngine = .vision, onProgress: @escaping (Double) -> Void
+        url: URL, engine: AnalysisEngine = .vision, kopsCalibration: KopsCalibration? = nil,
+        onProgress: @escaping (Double) -> Void
     ) throws -> VideoAnalysisResult {
+        if let calibration = kopsCalibration {
+            guard engine == .mediaPipe, calibration.millimetersPerImageWidth.isFinite,
+                  calibration.millimetersPerImageWidth > 0 else { throw AnalysisError.invalidCalibration }
+        }
         let asset = AVURLAsset(url: url)
         let duration = asset.duration.seconds
         guard duration.isFinite, duration > 0 else { throw AnalysisError.invalidVideo }
@@ -71,8 +78,8 @@ enum VideoAnalyzer {
             try Task.checkCancellation()
             let image = try generator.copyCGImage(at: CMTime(seconds: time, preferredTimescale: 600), actualTime: nil)
             sampled += 1
-            for (side, angles) in try estimator.measure(image: image, time: time) {
-                samples.append(Sample(side: side, time: time, angles: angles))
+            for (side, measurement) in try estimator.measure(image: image, time: time) {
+                samples.append(Sample(side: side, time: time, angles: measurement.angles, points: measurement.points))
             }
             let now = ProcessInfo.processInfo.systemUptime
             if now - lastUpdate >= 0.2 || time + 0.2 >= duration {
@@ -104,6 +111,16 @@ enum VideoAnalyzer {
                 try detector.add(kneeAngle: knee, time: sample.time)
             }
         }
+        var kopsResult: KopsVideoResult?
+        if let calibration = kopsCalibration {
+            var tracker = KopsVideoTracker(calibration: calibration)
+            for sample in validSamples {
+                if let points = sample.points {
+                    tracker.add(points: points, time: sample.time)
+                }
+            }
+            kopsResult = tracker.result
+        }
         return VideoAnalysisResult(
             ranges: ranges,
             validFrames: validSamples.count,
@@ -111,24 +128,32 @@ enum VideoAnalyzer {
             side: selected.title,
             timeline: validSamples.map { AngleSample(time: $0.time, angles: $0.angles) },
             estimatedCycles: detector.cycles,
-            engine: engine
+            engine: engine,
+            kops: kopsResult
         )
+    }
+
+    private struct Measurement {
+        let angles: [JointAngle: Double]
+        let points: BodyPoints?
     }
 
     private enum PoseEstimator {
         case vision(VNDetectHumanBodyPoseRequest)
         case mediaPipe(MediaPipePoseEstimator)
 
-        func measure(image: CGImage, time: Double) throws -> [Side: [JointAngle: Double]] {
+        func measure(image: CGImage, time: Double) throws -> [Side: Measurement] {
             switch self {
             case .vision(let request):
                 try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
                 guard let observation = request.results?.first else { return [:] }
                 return try VideoAnalyzer.measuredAngles(
                     observation: observation, width: CGFloat(image.width), height: CGFloat(image.height)
-                )
+                ).mapValues { Measurement(angles: $0, points: nil) }
             case .mediaPipe(let estimator):
-                return try estimator.measure(image: image, time: time)
+                return try estimator.measure(image: image, time: time).mapValues {
+                    Measurement(angles: $0.angles, points: $0.points)
+                }
             }
         }
     }
@@ -164,11 +189,13 @@ enum VideoAnalyzer {
 
     enum AnalysisError: LocalizedError {
         case invalidVideo
+        case invalidCalibration
         case noPose
 
         var errorDescription: String? {
             switch self {
             case .invalidVideo: return "No se pudo leer la duración del vídeo."
+            case .invalidCalibration: return "La calibración KOPS no es válida para el motor seleccionado."
             case .noPose: return "No se pudo detectar una postura completa. Comprueba el encuadre y la iluminación."
             }
         }

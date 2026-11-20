@@ -5,7 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     private enum Screen {
-        case home, capture, live, review, results, annotatedVideo, cleats, kops, kopsVideo, history, profiles
+        case home, capture, live, frontal, silhouettes, sensors, arMeasure, review, results, annotatedVideo, cleats, kops, kopsVideo, history, profiles
     }
 
     @State private var screen: Screen = .home
@@ -36,6 +36,16 @@ struct ContentView: View {
                     })
                 case .live:
                     LiveAnalysisView(onClose: { screen = .home })
+                case .frontal:
+                    LiveAnalysisView(mode: .frontal, onClose: { screen = .home })
+                case .silhouettes:
+                    if let url = videoURL {
+                        FrontalSilhouetteView(url: url, onClose: { screen = .review })
+                    }
+                case .sensors:
+                    BluetoothSensorsView(onClose: { screen = .home })
+                case .arMeasure:
+                    ARMeasurementView(onClose: { screen = .home })
                 case .review:
                     if let url = videoURL {
                         review(url: url)
@@ -120,6 +130,11 @@ struct ContentView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isImporting)
+                Button("Análisis frontal (experimental)") {
+                    screen = .frontal
+                }
+                .buttonStyle(.bordered)
+                .disabled(isImporting)
                 PhotosPicker(selection: $selectedVideo, matching: .videos) {
                     Text("Analizar vídeo de la fototeca")
                 }
@@ -143,6 +158,16 @@ struct ContentView: View {
                 Text("Medición KOPS manual").font(.title2.bold())
                 Text("Usa una fotografía lateral y una referencia de longitud conocida.")
                 Button("Abrir asistente KOPS") { screen = .kops }
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
+                Divider()
+                Text("Medición AR").font(.title2.bold())
+                Button("Medir dos puntos con AR") { screen = .arMeasure }
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
+                Divider()
+                Text("Sensores Bluetooth").font(.title2.bold())
+                Button("Conectar sensor") { screen = .sensors }
                     .buttonStyle(.bordered)
                     .disabled(isImporting)
                 Divider()
@@ -172,6 +197,7 @@ struct ContentView: View {
             onAnalyze: { startAnalysis(url, engine: .vision) },
             onAnalyzeMediaPipe: { startAnalysis(url, engine: .mediaPipe) },
             onAnalyzeKops: { screen = .kopsVideo },
+            onCompareSilhouettes: { screen = .silhouettes },
             onCancelAnalysis: {
                 isCancellingAnalysis = true
                 analysisTask?.cancel()
@@ -478,11 +504,12 @@ private struct ReviewScreen: View {
     let onAnalyze: () -> Void
     let onAnalyzeMediaPipe: () -> Void
     let onAnalyzeKops: () -> Void
+    let onCompareSilhouettes: () -> Void
     let onCancelAnalysis: () -> Void
     let onRetake: () -> Void
     let onClose: () -> Void
 
-    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onAnalyzeMediaPipe: @escaping () -> Void, onAnalyzeKops: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(url: URL, isAnalyzing: Bool, progress: Double?, isCancelling: Bool, error: String?, onAnalyze: @escaping () -> Void, onAnalyzeMediaPipe: @escaping () -> Void, onAnalyzeKops: @escaping () -> Void, onCompareSilhouettes: @escaping () -> Void, onCancelAnalysis: @escaping () -> Void, onRetake: @escaping () -> Void, onClose: @escaping () -> Void) {
         _player = State(initialValue: AVPlayer(url: url))
         self.isAnalyzing = isAnalyzing
         self.progress = progress
@@ -491,6 +518,7 @@ private struct ReviewScreen: View {
         self.onAnalyze = onAnalyze
         self.onAnalyzeMediaPipe = onAnalyzeMediaPipe
         self.onAnalyzeKops = onAnalyzeKops
+        self.onCompareSilhouettes = onCompareSilhouettes
         self.onCancelAnalysis = onCancelAnalysis
         self.onRetake = onRetake
         self.onClose = onClose
@@ -523,6 +551,8 @@ private struct ReviewScreen: View {
                     Button("Analizar con MediaPipe (experimental)", action: onAnalyzeMediaPipe)
                         .buttonStyle(.bordered)
                     Button("Calibrar y analizar KOPS en vídeo", action: onAnalyzeKops)
+                        .buttonStyle(.bordered)
+                    Button("Comparar siluetas frontales", action: onCompareSilhouettes)
                         .buttonStyle(.bordered)
                     Text("MediaPipe puede medir también tobillo y pie si detecta la punta. Los motores pueden producir resultados distintos.")
                         .font(.footnote)

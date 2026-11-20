@@ -36,7 +36,8 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: BikeFit
-        INFOPLIST_KEY_NSCameraUsageDescription: La cámara permite grabar o analizar en directo tu postura en la bicicleta.
+        INFOPLIST_KEY_NSCameraUsageDescription: La cámara permite grabar o analizar en directo tu postura y realizar mediciones AR aproximadas.
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: Bluetooth permite conectar sensores de potencia, cadencia o frecuencia cardiaca.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
   BikeFitIOSTests:
     type: bundle.unit-test

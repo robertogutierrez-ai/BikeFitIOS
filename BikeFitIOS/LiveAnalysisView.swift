@@ -3,27 +3,50 @@ import Combine
 import SwiftUI
 
 struct LiveAnalysisView: View {
-    @StateObject private var camera = LiveAnalysisCamera()
+    @StateObject private var camera: LiveAnalysisCamera
     @Environment(\.scenePhase) private var scenePhase
+    private let mode: LiveAnalysisCamera.Mode
     let onClose: () -> Void
+
+    init(mode: LiveAnalysisCamera.Mode = .lateral, onClose: @escaping () -> Void) {
+        self.mode = mode
+        self.onClose = onClose
+        _camera = StateObject(wrappedValue: LiveAnalysisCamera(mode: mode))
+    }
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("Análisis en directo · experimental")
+            Text(mode == .frontal ? "Análisis frontal · experimental" : "Análisis en directo · experimental")
                 .font(.headline)
-            Text("Coloca el iPhone fijo y de lado, con todo el cuerpo visible. No se graba vídeo.")
+            Text(mode == .frontal
+                 ? "Coloca el iPhone fijo frente a la bicicleta, con ambas piernas visibles. No se graba vídeo."
+                 : "Coloca el iPhone fijo y de lado, con todo el cuerpo visible. No se graba vídeo.")
                 .font(.subheadline)
                 .padding(.horizontal)
             GeometryReader { geometry in
-                CameraPreview(session: camera.session, onOrientationChange: camera.setOrientation)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-                    .accessibilityLabel("Vista de cámara para análisis en directo")
+                ZStack {
+                    CameraPreview(session: camera.session, onOrientationChange: camera.setOrientation)
+                        .accessibilityLabel("Vista de cámara para análisis en directo")
+                    if mode == .frontal {
+                        FramingGuide().allowsHitTesting(false)
+                    }
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
             }
             .background(.black)
             if camera.starting {
                 ProgressView("Iniciando cámara…")
-            } else if let side = camera.side {
+            } else if mode == .frontal && !camera.frontalSeparations.isEmpty {
+                VStack(spacing: 4) {
+                    Text("Separación horizontal rodilla–tobillo").font(.subheadline)
+                    ForEach(VideoAnalyzer.Side.allCases, id: \.self) { side in
+                        if let value = camera.frontalSeparations[side] {
+                            Text(String(format: "Lado %@: %.1f %% del ancho de imagen", side.title, value))
+                        }
+                    }
+                }
+            } else if mode == .lateral, let side = camera.side {
                 Text("Lado \(side) · valores instantáneos")
                     .font(.subheadline)
                 ScrollView {
@@ -42,12 +65,16 @@ struct LiveAnalysisView: View {
                 }
                 .frame(maxHeight: 140)
             } else if camera.ready {
-                Text("Buscando una postura completa; comprueba el encuadre y la iluminación.")
+                Text(mode == .frontal
+                     ? "Buscando rodillas y tobillos; comprueba el encuadre y la iluminación."
+                     : "Buscando una postura completa; comprueba el encuadre y la iluminación.")
                     .font(.footnote)
             } else {
                 Button("Reintentar cámara") { camera.start() }
             }
-            Text("Valores orientativos, no validados clínicamente; pueden variar entre fotogramas y lados.")
+            Text(mode == .frontal
+                 ? "Distancias 2D instantáneas sin dirección ni escala real. Dependen del encuadre y de la fase de pedaleo; no indican alineación correcta ni son un diagnóstico."
+                 : "Valores orientativos, no validados clínicamente; pueden variar entre fotogramas y lados.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)

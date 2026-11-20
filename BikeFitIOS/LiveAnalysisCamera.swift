@@ -5,6 +5,11 @@ import Foundation
 import Vision
 
 final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    enum Mode {
+        case lateral, frontal
+    }
+
+    private let mode: Mode
     let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "com.bikefit.live-camera", qos: .userInitiated)
@@ -26,7 +31,13 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     @Published private(set) var position: AVCaptureDevice.Position = .back
     @Published private(set) var angles: [JointAngle: Double] = [:]
     @Published private(set) var side: String?
+    @Published private(set) var frontalSeparations: [VideoAnalyzer.Side: Double] = [:]
     @Published var errorMessage: String?
+
+    init(mode: Mode = .lateral) {
+        self.mode = mode
+        super.init()
+    }
 
     func start() {
         guard !active else { return }
@@ -111,6 +122,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         orientation = newOrientation
         angles = [:]
         side = nil
+        frontalSeparations = [:]
         measurementVersion += 1
         let version = measurementVersion
         let id = generation
@@ -143,6 +155,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         switching = true
         angles = [:]
         side = nil
+        frontalSeparations = [:]
         measurementVersion += 1
         let version = measurementVersion
         generation += 1
@@ -193,6 +206,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         switching = false
         angles = [:]
         side = nil
+        frontalSeparations = [:]
         queue.async {
             self.runID = nil
             self.lastSampleTime = nil
@@ -228,19 +242,27 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             let handler = VNImageRequestHandler(cvPixelBuffer: image, orientation: .up, options: [:])
             try handler.perform([request])
             var measured: [VideoAnalyzer.Side: [JointAngle: Double]] = [:]
+            var frontal: [VideoAnalyzer.Side: Double] = [:]
             if let observation = request.results?.first {
-                measured = try VideoAnalyzer.measuredAngles(
-                    observation: observation,
-                    width: CGFloat(CVPixelBufferGetWidth(image)),
-                    height: CGFloat(CVPixelBufferGetHeight(image))
-                )
+                switch mode {
+                case .lateral:
+                    measured = try VideoAnalyzer.measuredAngles(
+                        observation: observation,
+                        width: CGFloat(CVPixelBufferGetWidth(image)),
+                        height: CGFloat(CVPixelBufferGetHeight(image))
+                    )
+                case .frontal:
+                    frontal = try Self.frontalSeparations(observation: observation)
+                }
             }
             let selected = Self.preferredSide(in: measured)
             let values = selected.flatMap { measured[$0] } ?? [:]
+            let frontalValues = frontal
             DispatchQueue.main.async {
                 guard self.active, self.generation == id, self.measurementVersion == version else { return }
                 self.side = selected?.title
                 self.angles = values
+                self.frontalSeparations = frontalValues
             }
         } catch {
             reportFrameError(error, id: id)
@@ -251,6 +273,20 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         if measured[.left] != nil { return .left }
         if measured[.right] != nil { return .right }
         return nil
+    }
+
+    static func frontalSeparations(observation: VNHumanBodyPoseObservation) throws -> [VideoAnalyzer.Side: Double] {
+        var result: [VideoAnalyzer.Side: Double] = [:]
+        for side in VideoAnalyzer.Side.allCases {
+            let knee = try observation.recognizedPoint(side.joints[4])
+            let ankle = try observation.recognizedPoint(side.joints[5])
+            guard knee.confidence >= 0.55, ankle.confidence >= 0.55,
+                  let separation = FrontalKneeMeasurement.separation(knee: knee.location, ankle: ankle.location) else {
+                continue
+            }
+            result[side] = separation
+        }
+        return result
     }
 
     private func reportFrameError(_ error: Error, id: Int) {

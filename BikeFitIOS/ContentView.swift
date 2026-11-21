@@ -9,6 +9,7 @@ struct ContentView: View {
     }
 
     @State private var screen: Screen = .home
+    @State private var liveEngine: AnalysisEngine = .vision
     @State private var videoURL: URL?
     @State private var result: VideoAnalysisResult?
     @State private var analysisError: String?
@@ -37,7 +38,7 @@ struct ContentView: View {
                         screen = .review
                     })
                 case .live:
-                    LiveAnalysisView(onClose: { screen = .home }, onRecorded: { url in
+                    LiveAnalysisView(engine: liveEngine, onClose: { screen = .home }, onRecorded: { url in
                         videoURL = url
                         result = nil
                         screen = .review
@@ -132,6 +133,13 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isImporting)
                 Button("Análisis en directo (experimental)") {
+                    liveEngine = .vision
+                    screen = .live
+                }
+                .buttonStyle(.bordered)
+                .disabled(isImporting)
+                Button("Análisis en directo con MediaPipe (experimental)") {
+                    liveEngine = .mediaPipe
                     screen = .live
                 }
                 .buttonStyle(.bordered)

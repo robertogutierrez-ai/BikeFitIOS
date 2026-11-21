@@ -6,23 +6,28 @@ struct LiveAnalysisView: View {
     @StateObject private var camera: LiveAnalysisCamera
     @Environment(\.scenePhase) private var scenePhase
     private let mode: LiveAnalysisCamera.Mode
+    private let engine: AnalysisEngine
     let onClose: () -> Void
     let onRecorded: ((URL) -> Void)?
     @State private var recordVideo = false
     @State private var saved = false
 
-    init(mode: LiveAnalysisCamera.Mode = .lateral, onClose: @escaping () -> Void,
+    init(mode: LiveAnalysisCamera.Mode = .lateral, engine: AnalysisEngine = .vision, onClose: @escaping () -> Void,
          onRecorded: ((URL) -> Void)? = nil) {
         self.mode = mode
+        self.engine = engine
         self.onClose = onClose
         self.onRecorded = onRecorded
-        _camera = StateObject(wrappedValue: LiveAnalysisCamera(mode: mode))
+        _camera = StateObject(wrappedValue: LiveAnalysisCamera(mode: mode, engine: engine))
     }
 
     var body: some View {
         VStack(spacing: 8) {
             Text(mode == .frontal ? "Análisis frontal · experimental" : "Análisis en directo · experimental")
                 .font(.headline)
+            if mode == .lateral {
+                Text("Motor: \(engine.rawValue)").font(.subheadline)
+            }
             Text(mode == .frontal
                  ? "Coloca el iPhone fijo frente a la bicicleta, con ambas piernas visibles. No se graba vídeo."
                  : "Coloca el iPhone fijo y de lado, con todo el cuerpo visible. La grabación es opcional.")
@@ -125,7 +130,7 @@ struct LiveAnalysisView: View {
                         .disabled(onRecorded == nil)
                         Button("Eliminar grabación temporal") { _ = camera.removeRecording() }
                     }
-                    Text("La sesión usa Vision, suaviza los ángulos con hasta cuatro muestras y estima ciclos con la rodilla. El indicador se basa en el movimiento observado de la rodilla y no determina la calidad del ajuste. Se guardan todas las muestras válidas, también cuando no se detecta movimiento. La grabación puede analizarse después con MediaPipe.")
+                    Text("La sesión usa \(engine.rawValue), suaviza los ángulos con hasta cuatro muestras y estima ciclos con la rodilla. El indicador se basa en el movimiento observado de la rodilla y no determina la calidad del ajuste. Se guardan todas las muestras válidas, también cuando no se detecta movimiento. La grabación puede analizarse después por separado.")
                         .font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
                 }
             }

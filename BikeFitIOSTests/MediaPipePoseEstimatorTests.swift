@@ -1,4 +1,5 @@
 import CoreImage
+import CoreVideo
 import XCTest
 @testable import BikeFitIOS
 
@@ -63,5 +64,19 @@ final class MediaPipePoseEstimatorTests: XCTestCase {
         let imageEstimator = try MediaPipePoseEstimator(mode: .image)
         XCTAssertTrue(try imageEstimator.measure(image: image, time: 0).isEmpty)
         XCTAssertTrue(try imageEstimator.measure(image: image, time: 0).isEmpty)
+    }
+
+    func testVideoModeAnalyzesCameraPixelBuffersInOrder() throws {
+        var buffer: CVPixelBuffer?
+        XCTAssertEqual(CVPixelBufferCreate(nil, 160, 160, kCVPixelFormatType_32BGRA, nil, &buffer), kCVReturnSuccess)
+        let pixelBuffer = try XCTUnwrap(buffer)
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(pixelBuffer, []), kCVReturnSuccess)
+        let base = try XCTUnwrap(CVPixelBufferGetBaseAddress(pixelBuffer))
+        memset(base, 255, CVPixelBufferGetBytesPerRow(pixelBuffer) * CVPixelBufferGetHeight(pixelBuffer))
+        XCTAssertEqual(CVPixelBufferUnlockBaseAddress(pixelBuffer, []), kCVReturnSuccess)
+        let estimator = try MediaPipePoseEstimator()
+        let context = CIContext()
+        XCTAssertTrue(try estimator.measure(pixelBuffer: pixelBuffer, time: 0, context: context).isEmpty)
+        XCTAssertTrue(try estimator.measure(pixelBuffer: pixelBuffer, time: 0.2, context: context).isEmpty)
     }
 }

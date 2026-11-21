@@ -13,6 +13,11 @@ struct LiveSessionAccumulator {
     private var startTime: Double?
     private var previousTime: Double?
     private(set) var sampledFrames = 0
+    private let engine: AnalysisEngine
+
+    init(engine: AnalysisEngine = .vision) {
+        self.engine = engine
+    }
 
     mutating func add(time: Double, measured: [VideoAnalyzer.Side: [JointAngle: Double]]) throws {
         guard time.isFinite, previousTime.map({ time > $0 }) ?? true else { throw SampleError.invalidTime }
@@ -70,7 +75,7 @@ struct LiveSessionAccumulator {
         }
         return VideoAnalysisResult(ranges: ranges, validFrames: state.samples.count,
                                    sampledFrames: sampledFrames, side: side.title,
-                                   timeline: state.samples, estimatedCycles: state.detector.cycles, engine: .vision)
+                                   timeline: state.samples, estimatedCycles: state.detector.cycles, engine: engine)
     }
 
     func latest(for side: VideoAnalyzer.Side) -> [JointAngle: Double]? {

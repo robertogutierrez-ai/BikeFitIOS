@@ -1,4 +1,6 @@
 import CoreGraphics
+import CoreImage
+import CoreVideo
 import Foundation
 import MediaPipeTasksVision
 import UIKit
@@ -61,6 +63,14 @@ final class MediaPipePoseEstimator {
             }
         }
         return measured
+    }
+
+    func measure(pixelBuffer: CVPixelBuffer, time: Double, context: CIContext) throws -> [VideoAnalyzer.Side: MediaPipeMeasurement] {
+        let source = CIImage(cvPixelBuffer: pixelBuffer)
+        guard let frame = context.createCGImage(source, from: source.extent) else {
+            throw PoseError.invalidImage
+        }
+        return try measure(image: frame, time: time)
     }
 
     static func points(_ landmarks: [MediaPipeLandmark], side: VideoAnalyzer.Side) -> BodyPoints? {

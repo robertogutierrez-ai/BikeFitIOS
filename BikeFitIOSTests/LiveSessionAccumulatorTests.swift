@@ -8,6 +8,7 @@ final class LiveSessionAccumulatorTests: XCTestCase {
         try session.add(time: 10.2, measured: [.left: [.knee: 60]])
         try session.add(time: 10.4, measured: [:])
         let result = try session.result()
+        XCTAssertEqual(result.engine, .vision)
         XCTAssertEqual(result.side, "izquierdo")
         XCTAssertEqual(result.sampledFrames, 3)
         XCTAssertEqual(result.validFrames, 2)
@@ -50,5 +51,14 @@ final class LiveSessionAccumulatorTests: XCTestCase {
         XCTAssertFalse(session.isPedaling(for: .left))
         XCTAssertEqual(try session.result().sampledFrames, 5)
         XCTAssertEqual(try session.result().validFrames, 4)
+    }
+
+    func testSessionStoresChosenEngineAndFootMeasurements() throws {
+        var session = LiveSessionAccumulator(engine: .mediaPipe)
+        try session.add(time: 1, measured: [.right: [.knee: 50, .ankle: 30]])
+        let result = try session.result()
+        XCTAssertEqual(result.engine, .mediaPipe)
+        XCTAssertEqual(result.ranges[.ankle]?.minimum, 30)
+        XCTAssertEqual(result.timeline?.first?.angles[.ankle], 30)
     }
 }

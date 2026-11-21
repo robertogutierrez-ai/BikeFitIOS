@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import CoreImage
 import CoreVideo
 import Foundation
 import Vision
@@ -10,11 +11,15 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     }
 
     private let mode: Mode
+    private let engine: AnalysisEngine
     let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
     private let movieOutput = AVCaptureMovieFileOutput()
     private let queue = DispatchQueue(label: "com.bikefit.live-camera", qos: .userInitiated)
     private let request = VNDetectHumanBodyPoseRequest()
+    private let imageContext = CIContext()
+    private var mediaPipe: MediaPipePoseEstimator?
+    private var mediaPipeStartTime: Double?
     private var input: AVCaptureDeviceInput?
     private var configured = false
     private var runID: Int?
@@ -49,8 +54,9 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     @Published private(set) var recordedURL: URL?
     @Published var errorMessage: String?
 
-    init(mode: Mode = .lateral) {
+    init(mode: Mode = .lateral, engine: AnalysisEngine = .vision) {
         self.mode = mode
+        self.engine = engine
         super.init()
     }
 
@@ -91,6 +97,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
                 self.frameVersion = version
                 self.lastSampleTime = nil
                 try self.setOutputOrientation(initialOrientation)
+                try self.resetPoseEstimator()
                 if !self.session.isRunning {
                     self.session.startRunning()
                 }
@@ -157,6 +164,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             guard self.configured else { return }
             do {
                 try self.setOutputOrientation(newOrientation)
+                try self.resetPoseEstimator()
             } catch {
                 self.reportFrameError(error, id: id)
             }
@@ -172,6 +180,14 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         if connection.isVideoMirroringSupported {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = false
+        }
+    }
+
+    private func resetPoseEstimator() throws {
+        mediaPipeStartTime = nil
+        mediaPipe = nil
+        if mode == .lateral && engine == .mediaPipe {
+            mediaPipe = try MediaPipePoseEstimator()
         }
     }
 
@@ -193,6 +209,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             do {
                 try self.replaceCamera(position: next)
                 try self.setOutputOrientation(currentOrientation)
+                try self.resetPoseEstimator()
                 self.lastSampleTime = nil
                 DispatchQueue.main.async {
                     guard self.active, self.generation == id else { return }
@@ -245,6 +262,8 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             self.runID = nil
             self.accumulator = nil
             self.accumulatorID = nil
+            self.mediaPipe = nil
+            self.mediaPipeStartTime = nil
             self.lastSampleTime = nil
             if self.session.isRunning {
                 self.session.stopRunning()
@@ -283,7 +302,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         let sessionID = UUID()
         collectionID = sessionID
         queue.async {
-            self.accumulator = LiveSessionAccumulator()
+            self.accumulator = LiveSessionAccumulator(engine: self.engine)
             self.accumulatorID = sessionID
         }
         if recordVideo {
@@ -405,20 +424,28 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             guard let image = CMSampleBufferGetImageBuffer(sampleBuffer) else {
                 throw CameraError.invalidFrame
             }
-            let handler = VNImageRequestHandler(cvPixelBuffer: image, orientation: .up, options: [:])
-            try handler.perform([request])
             var measured: [VideoAnalyzer.Side: [JointAngle: Double]] = [:]
             var frontal: [VideoAnalyzer.Side: Double] = [:]
-            if let observation = request.results?.first {
-                switch mode {
-                case .lateral:
-                    measured = try VideoAnalyzer.measuredAngles(
-                        observation: observation,
-                        width: CGFloat(CVPixelBufferGetWidth(image)),
-                        height: CGFloat(CVPixelBufferGetHeight(image))
-                    )
-                case .frontal:
-                    frontal = try Self.frontalSeparations(observation: observation)
+            if mode == .lateral && engine == .mediaPipe {
+                guard let estimator = mediaPipe else { throw CameraError.estimatorUnavailable }
+                if mediaPipeStartTime == nil { mediaPipeStartTime = time }
+                guard let start = mediaPipeStartTime else { throw CameraError.invalidFrame }
+                measured = try estimator.measure(pixelBuffer: image, time: time - start, context: imageContext)
+                    .mapValues(\.angles)
+            } else {
+                let handler = VNImageRequestHandler(cvPixelBuffer: image, orientation: .up, options: [:])
+                try handler.perform([request])
+                if let observation = request.results?.first {
+                    switch mode {
+                    case .lateral:
+                        measured = try VideoAnalyzer.measuredAngles(
+                            observation: observation,
+                            width: CGFloat(CVPixelBufferGetWidth(image)),
+                            height: CGFloat(CVPixelBufferGetHeight(image))
+                        )
+                    case .frontal:
+                        frontal = try Self.frontalSeparations(observation: observation)
+                    }
                 }
             }
             let selected = Self.preferredSide(in: measured)
@@ -472,7 +499,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     }
 
     private enum CameraError: LocalizedError {
-        case cameraUnavailable, configurationFailed, startFailed, invalidFrame, orientationUnavailable, noSession
+        case cameraUnavailable, configurationFailed, startFailed, invalidFrame, orientationUnavailable, noSession, estimatorUnavailable
 
         var errorDescription: String? {
             switch self {
@@ -482,6 +509,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
             case .invalidFrame: return "El fotograma recibido no es válido."
             case .orientationUnavailable: return "No se puede orientar la imagen de cámara."
             case .noSession: return "La sesión no está disponible."
+            case .estimatorUnavailable: return "El detector MediaPipe no está disponible."
             }
         }
     }

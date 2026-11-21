@@ -80,4 +80,9 @@ struct PhaseImagesView: View {
             self.error = "No se pudieron eliminar las imágenes: \(error.localizedDescription)"
         }
     }
+
+    private enum SnapshotError: LocalizedError {
+        case invalidImage
+        var errorDescription: String? { "La imagen guardada no es válida." }
+    }
 }

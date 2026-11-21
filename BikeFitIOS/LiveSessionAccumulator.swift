@@ -5,6 +5,7 @@ struct LiveSessionAccumulator {
         var recent: [[JointAngle: Double]] = []
         var samples: [AngleSample] = []
         var detector = PedalingDetector()
+        var motion = PedalingMotion()
         var lastTime: Double?
     }
 
@@ -24,10 +25,14 @@ struct LiveSessionAccumulator {
             guard let angles = measured[side], let knee = angles[.knee], knee.isFinite,
                   angles.values.allSatisfy(\.isFinite) else {
                 data[side]?.recent = []
+                data[side]?.motion.reset()
                 continue
             }
             var state = data[side] ?? SideData()
-            if let last = state.lastTime, relative - last > 1.5 { state.recent = [] }
+            if let last = state.lastTime, relative - last > 1.5 {
+                state.recent = []
+                state.motion.reset()
+            }
             state.recent.append(angles)
             if state.recent.count > 4 { state.recent.removeFirst() }
             var smoothed: [JointAngle: Double] = [:]
@@ -36,6 +41,9 @@ struct LiveSessionAccumulator {
                 smoothed[angle] = values.reduce(0, +) / Double(values.count)
             }
             try state.detector.add(kneeAngle: knee, time: relative)
+            if let smoothedKnee = smoothed[.knee] {
+                state.motion.add(kneeAngle: smoothedKnee, time: relative)
+            }
             state.samples.append(AngleSample(time: relative, angles: smoothed))
             state.lastTime = relative
             data[side] = state
@@ -67,6 +75,10 @@ struct LiveSessionAccumulator {
 
     func latest(for side: VideoAnalyzer.Side) -> [JointAngle: Double]? {
         data[side]?.samples.last?.angles
+    }
+
+    func isPedaling(for side: VideoAnalyzer.Side) -> Bool {
+        data[side]?.motion.detected ?? false
     }
 
     private enum SampleError: LocalizedError {

@@ -21,11 +21,13 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     private var lastSampleTime: Double?
     private var frameVersion = 0
     private var accumulator: LiveSessionAccumulator?
+    private var accumulatorID: UUID?
 
     // These properties and the published state are accessed on the main thread.
     private var generation = 0
     private var measurementVersion = 0
     private var active = false
+    private var collectionID: UUID?
     private var orientation: AVCaptureVideoOrientation = .portrait
     private var pendingRecording = false
     private var discardRecording = false
@@ -40,6 +42,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     @Published private(set) var frontalSeparations: [VideoAnalyzer.Side: Double] = [:]
     @Published private(set) var canRecordVideo = false
     @Published private(set) var collecting = false
+    @Published private(set) var pedalingDetected = false
     @Published private(set) var finalizing = false
     @Published private(set) var startingRecording = false
     @Published private(set) var sessionResult: VideoAnalysisResult?
@@ -233,12 +236,15 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         side = nil
         frontalSeparations = [:]
         collecting = false
+        pedalingDetected = false
+        collectionID = nil
         finalizing = false
         startingRecording = false
         canRecordVideo = false
         queue.async {
             self.runID = nil
             self.accumulator = nil
+            self.accumulatorID = nil
             self.lastSampleTime = nil
             if self.session.isRunning {
                 self.session.stopRunning()
@@ -273,7 +279,13 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
         analysisFinished = false
         recordingFinished = !recordVideo
         collecting = true
-        queue.async { self.accumulator = LiveSessionAccumulator() }
+        pedalingDetected = false
+        let sessionID = UUID()
+        collectionID = sessionID
+        queue.async {
+            self.accumulator = LiveSessionAccumulator()
+            self.accumulatorID = sessionID
+        }
         if recordVideo {
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("bikefit-live-\(UUID().uuidString).mov")
             pendingRecording = true
@@ -285,6 +297,8 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
     func endSession() {
         guard collecting, !startingRecording else { return }
         collecting = false
+        pedalingDetected = false
+        collectionID = nil
         finalizing = true
         let id = generation
         queue.async {
@@ -292,6 +306,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
                 guard let accumulator = self.accumulator else { throw CameraError.noSession }
                 let result = try accumulator.result()
                 self.accumulator = nil
+                self.accumulatorID = nil
                 DispatchQueue.main.async {
                     guard self.active, self.generation == id else { return }
                     self.sessionResult = result
@@ -300,6 +315,7 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
                 }
             } catch {
                 self.accumulator = nil
+                self.accumulatorID = nil
                 DispatchQueue.main.async {
                     guard self.active, self.generation == id else { return }
                     self.errorMessage = "No se pudo completar la sesión: \(error.localizedDescription)"
@@ -410,12 +426,17 @@ final class LiveAnalysisCamera: NSObject, ObservableObject, AVCaptureVideoDataOu
                 try self.accumulator?.add(time: time, measured: measured)
             }
             let values = selected.flatMap { self.accumulator?.latest(for: $0) ?? measured[$0] } ?? [:]
+            let pedaling = selected.map { self.accumulator?.isPedaling(for: $0) ?? false } ?? false
+            let frameCollectionID = self.accumulatorID
             let frontalValues = frontal
             DispatchQueue.main.async {
                 guard self.active, self.generation == id, self.measurementVersion == version else { return }
                 self.side = selected?.title
                 self.angles = values
                 self.frontalSeparations = frontalValues
+                if self.collecting, self.collectionID == frameCollectionID {
+                    self.pedalingDetected = pedaling
+                }
             }
         } catch {
             reportFrameError(error, id: id)

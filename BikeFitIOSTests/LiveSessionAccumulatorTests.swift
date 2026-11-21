@@ -35,4 +35,20 @@ final class LiveSessionAccumulatorTests: XCTestCase {
         try session.add(time: 1.4, measured: [.left: [.knee: 60]])
         XCTAssertEqual(session.latest(for: .left)?[.knee], 60)
     }
+
+    func testMovementIsPerSideAndDoesNotFilterSessionSamples() throws {
+        var session = LiveSessionAccumulator()
+        try session.add(time: 0, measured: [.left: [.knee: 40], .right: [.knee: 50]])
+        try session.add(time: 0.2, measured: [.left: [.knee: 80], .right: [.knee: 50]])
+        try session.add(time: 0.5, measured: [.left: [.knee: 100], .right: [.knee: 50]])
+        XCTAssertTrue(session.isPedaling(for: .left))
+        XCTAssertFalse(session.isPedaling(for: .right))
+        XCTAssertEqual(try session.result().validFrames, 3)
+        try session.add(time: 0.7, measured: [.right: [.knee: 50]])
+        XCTAssertFalse(session.isPedaling(for: .left))
+        try session.add(time: 0.9, measured: [.left: [.knee: 100]])
+        XCTAssertFalse(session.isPedaling(for: .left))
+        XCTAssertEqual(try session.result().sampledFrames, 5)
+        XCTAssertEqual(try session.result().validFrames, 4)
+    }
 }

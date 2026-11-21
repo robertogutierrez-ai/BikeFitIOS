@@ -87,6 +87,11 @@ struct LiveAnalysisView: View {
                 if camera.finalizing {
                     ProgressView("Finalizando sesión…")
                 } else if camera.collecting {
+                    Text(camera.pedalingDetected ? "Movimiento de pedaleo detectado · experimental" : "Esperando movimiento de pedaleo")
+                        .font(.subheadline)
+                        .foregroundStyle(camera.pedalingDetected ? Color.green : Color.secondary)
+                    Text("Indicador aproximado basado en la rodilla; se acumulan todas las muestras válidas.")
+                        .font(.footnote).foregroundStyle(.secondary)
                     Button(camera.startingRecording ? "Iniciando grabación…" : "Finalizar sesión") {
                         camera.endSession()
                     }
@@ -120,7 +125,7 @@ struct LiveAnalysisView: View {
                         .disabled(onRecorded == nil)
                         Button("Eliminar grabación temporal") { _ = camera.removeRecording() }
                     }
-                    Text("La sesión usa Vision, suaviza los ángulos con hasta cuatro muestras y estima ciclos con la rodilla. La grabación puede analizarse después con MediaPipe. No detecta la calidad del ajuste.")
+                    Text("La sesión usa Vision, suaviza los ángulos con hasta cuatro muestras y estima ciclos con la rodilla. El indicador se basa en el movimiento observado de la rodilla y no determina la calidad del ajuste. Se guardan todas las muestras válidas, también cuando no se detecta movimiento. La grabación puede analizarse después con MediaPipe.")
                         .font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
                 }
             }

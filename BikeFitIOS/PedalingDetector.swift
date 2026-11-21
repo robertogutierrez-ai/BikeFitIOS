@@ -48,3 +48,24 @@ struct PedalingDetector {
         }
     }
 }
+
+struct PedalingMotion {
+    private var samples: [(time: Double, knee: Double)] = []
+
+    mutating func add(kneeAngle: Double, time: Double) {
+        samples.append((time, kneeAngle))
+        samples.removeAll { time - $0.time > 1.5 }
+    }
+
+    mutating func reset() {
+        samples.removeAll()
+    }
+
+    var detected: Bool {
+        guard samples.count >= 3, let first = samples.first, let last = samples.last,
+              last.time - first.time >= 0.4,
+              let minimum = samples.map(\.knee).min(),
+              let maximum = samples.map(\.knee).max() else { return false }
+        return maximum - minimum >= 10
+    }
+}

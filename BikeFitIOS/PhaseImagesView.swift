@@ -1,7 +1,5 @@
 import AVFoundation
-import ImageIO
 import SwiftUI
-import UniformTypeIdentifiers
 import UIKit
 
 struct PhaseImagesView: View {
@@ -62,25 +60,7 @@ struct PhaseImagesView: View {
         Task {
             do {
                 let snapshots = try await Task.detached(priority: .userInitiated) {
-                    let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-                    generator.appliesPreferredTrackTransform = true
-                    generator.maximumSize = CGSize(width: 1280, height: 1280)
-                    var result: [String: Data] = [:]
-                    for phase in phases {
-                        let frame = try generator.copyCGImage(
-                            at: CMTime(seconds: phase.time, preferredTimescale: 600), actualTime: nil
-                        )
-                        let data = NSMutableData()
-                        guard let destination = CGImageDestinationCreateWithData(
-                            data, UTType.jpeg.identifier as CFString, 1, nil
-                        ) else { throw SnapshotError.invalidImage }
-                        CGImageDestinationAddImage(destination, frame, [
-                            kCGImageDestinationLossyCompressionQuality: 0.85
-                        ] as CFDictionary)
-                        guard CGImageDestinationFinalize(destination) else { throw SnapshotError.invalidImage }
-                        result[phase.kind.rawValue] = data as Data
-                    }
-                    return result
+                    try PhaseImageExtractor.extract(from: url, phases: phases)
                 }.value
                 try SessionHistoryStore.standard().savePhaseImages(snapshots, for: session)
                 images = snapshots
@@ -99,10 +79,5 @@ struct PhaseImagesView: View {
         } catch {
             self.error = "No se pudieron eliminar las imágenes: \(error.localizedDescription)"
         }
-    }
-
-    private enum SnapshotError: LocalizedError {
-        case invalidImage
-        var errorDescription: String? { "El fotograma no se pudo convertir a imagen." }
     }
 }

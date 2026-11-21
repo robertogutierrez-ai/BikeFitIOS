@@ -3,6 +3,7 @@ import CoreGraphics
 import CoreImage
 import CoreVideo
 import Foundation
+import UIKit
 import XCTest
 @testable import BikeFitIOS
 
@@ -90,6 +91,19 @@ final class AnnotatedVideoRendererTests: XCTestCase {
         }
 
         let asset = AVURLAsset(url: inputURL)
+        let phases = [PedalingPhase(kind: .top, time: 0.5)]
+        let images = try PhaseImageExtractor.extract(from: inputURL, phases: phases)
+        let topImage = try XCTUnwrap(images[PedalingPhase.Kind.top.rawValue])
+        XCTAssertNotNil(UIImage(data: topImage))
+        let store = SessionHistoryStore(directory: directory.appendingPathComponent("sessions", isDirectory: true))
+        let saved = try store.save(VideoAnalysisResult(
+            ranges: [:], validFrames: 1, sampledFrames: 1, side: "izquierdo", phases: phases
+        ))
+        try store.savePhaseImages(images, for: saved)
+        XCTAssertEqual(try store.phaseImages(for: saved), images)
+        try store.delete(saved)
+        XCTAssertTrue(try store.phaseImages(for: saved).isEmpty)
+
         let exporter = try XCTUnwrap(AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1280x720))
         guard exporter.supportedFileTypes.contains(.mp4) else {
             XCTFail("El exportador no admite MP4.")
@@ -113,6 +127,28 @@ final class AnnotatedVideoRendererTests: XCTestCase {
         let frame = try generator.copyCGImage(at: .zero, actualTime: nil)
         XCTAssertLessThan(frame.width, frame.height)
         XCTAssertEqual(Double(frame.width) / Double(frame.height), 90.0 / 160.0, accuracy: 0.03)
+
+        let mediaPipeURL = directory.appendingPathComponent("mediapipe.mp4")
+        let mediaPipeExporter = try XCTUnwrap(AVAssetExportSession(
+            asset: asset, presetName: AVAssetExportPreset1280x720
+        ))
+        mediaPipeExporter.outputURL = mediaPipeURL
+        mediaPipeExporter.outputFileType = .mp4
+        mediaPipeExporter.videoComposition = try AnnotatedVideoRenderer.mediaPipeComposition(for: asset, side: .left)
+        let mediaPipeExported = expectation(description: "Vídeo anotado MediaPipe exportado")
+        mediaPipeExporter.exportAsynchronously { mediaPipeExported.fulfill() }
+        wait(for: [mediaPipeExported], timeout: 90)
+        guard mediaPipeExporter.status == .completed else {
+            mediaPipeExporter.cancelExport()
+            XCTFail(mediaPipeExporter.error?.localizedDescription ?? "No se pudo exportar MediaPipe.")
+            return
+        }
+        let mediaPipeResult = AVURLAsset(url: mediaPipeURL)
+        XCTAssertGreaterThan(mediaPipeResult.duration.seconds, 0.5)
+        let mediaPipeGenerator = AVAssetImageGenerator(asset: mediaPipeResult)
+        mediaPipeGenerator.appliesPreferredTrackTransform = true
+        let mediaPipeFrame = try mediaPipeGenerator.copyCGImage(at: .zero, actualTime: nil)
+        XCTAssertLessThan(mediaPipeFrame.width, mediaPipeFrame.height)
 
         let failingExporter = try XCTUnwrap(AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1280x720))
         failingExporter.outputURL = directory.appendingPathComponent("failure.mp4")
